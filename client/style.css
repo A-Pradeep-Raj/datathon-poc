@@ -410,13 +410,22 @@ html, body {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px;
-  min-height: 260px;
+  height: 300px;
+  min-height: 300px;
+  max-height: 300px;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 .chart-card.wide { grid-column: span 2; }
-.chart-card h3 { font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; }
-.chart-card canvas { flex: 1; width: 100% !important; }
+.chart-card h3 { font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; flex-shrink: 0; }
+.chart-card canvas {
+  flex: 1 1 auto;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0;
+  max-height: 100%;
+}
 
 /* ── ANALYTICS ───────────────────────────────────────────────────────────── */
 .analytics-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
