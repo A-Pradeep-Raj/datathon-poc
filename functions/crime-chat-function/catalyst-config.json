@@ -1,0 +1,13 @@
+{
+  "deployment": {
+    "name": "crime-chat-function",
+    "stack": "python_3_11",
+    "type": "advancedio",
+    "memory": 256,
+    "timeout": 60,
+    "env_variables": {}
+  },
+  "execution": {
+    "main": "index.py"
+  }
+}

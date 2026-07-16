@@ -1,0 +1,16 @@
+{
+  "project_name": "ksp-crime-ai",
+  "project_directory": ".",
+  "project_id": "51742000000017001",
+  "project_key": "ksp-crime-ai",
+  "org_id": "60078097690",
+  "functions": {
+    "source": "functions",
+    "targets": [
+      "crime-chat-function"
+    ]
+  },
+  "client": {
+    "source": "client"
+  }
+}

@@ -1,0 +1,17 @@
+# Zoho Catalyst Advanced I/O Function Configuration
+name: crime-chat-function
+type: Advanced IO
+lang: python
+module: index
+handler: handler
+memory: 256
+timeout: 60
+cpu: 0.5
+runtime: python3.9
+
+# URL routing – all /api/* routes handled by this function
+routes:
+  - path: /api/*
+    method: ALL
+  - path: /
+    method: GET

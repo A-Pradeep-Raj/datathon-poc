@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>KSP Crime Intelligence AI | Datathon 2026</title>
+  <link rel="stylesheet" href="style.css"/>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <!-- vis-network for criminal network graph -->
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <!-- jsPDF for PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- Marked.js for markdown rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+  <!-- ── HEADER ──────────────────────────────────────────────────────────── -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="logo">
+        <span class="logo-icon">🚔</span>
+        <div>
+          <div class="logo-title">KSP Crime Intelligence AI</div>
+          <div class="logo-subtitle">Karnataka State Police · SCRB · Datathon 2026</div>
+        </div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="status-badge" id="dbStatus">
+        <span class="status-dot"></span> System Online
+      </div>
+      <div class="user-info">
+        <span class="user-avatar">👮</span>
+        <span id="userRole">SP - Bengaluru Urban</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── MAIN LAYOUT ─────────────────────────────────────────────────────── -->
+  <div class="app-layout">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <nav class="nav-menu">
+        <button class="nav-btn active" onclick="showTab('chat')" title="Chat">
+          💬 <span>AI Chat</span>
+        </button>
+        <button class="nav-btn" onclick="showTab('dashboard')" title="Dashboard">
+          📊 <span>Dashboard</span>
+        </button>
+        <button class="nav-btn" onclick="showTab('analytics')" title="Analytics">
+          📈 <span>Analytics</span>
+        </button>
+        <button class="nav-btn" onclick="showTab('heatmap')" title="Heatmap">
+          🗺️ <span>Heatmap</span>
+        </button>
+        <button class="nav-btn" onclick="showTab('network')" title="Network">
+          🕸️ <span>Network</span>
+        </button>
+        <button class="nav-btn" onclick="showTab('audit')" title="Audit Trail">
+          📋 <span>Audit Trail</span>
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="btn-outline" onclick="exportPDF()">📄 Export PDF</button>
+        <button class="btn-outline" onclick="initDb()">🔄 Reload DB</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+
+      <!-- ── TAB: CHAT ──────────────────────────────────────────────────── -->
+      <section id="tab-chat" class="tab-pane active">
+        <div class="chat-layout">
+          <div class="chat-panel">
+            <div class="chat-toolbar">
+              <div class="lang-switch">
+                <button class="lang-btn active" id="btn-en" onclick="setLang('en')">🇬🇧 English</button>
+                <button class="lang-btn" id="btn-kn" onclick="setLang('kn')">🇮🇳 ಕನ್ನಡ</button>
+              </div>
+              <div class="chat-actions">
+                <button class="icon-btn" onclick="clearChat()" title="Clear Chat">🗑️</button>
+                <button class="icon-btn" onclick="exportPDF()" title="Export PDF">📄</button>
+              </div>
+            </div>
+
+            <!-- Messages -->
+            <div class="chat-messages" id="chatMessages">
+              <div class="welcome-card">
+                <div class="welcome-icon">🚔</div>
+                <h2>KSP Crime Intelligence AI</h2>
+                <p>Ask me anything about Karnataka crime data in <strong>English</strong> or <strong>ಕನ್ನಡ</strong></p>
+                <div class="example-queries" id="exampleQueries"></div>
+              </div>
+            </div>
+
+            <!-- Input area -->
+            <div class="chat-input-area">
+              <div class="input-row">
+                <button class="icon-btn voice-btn" id="voiceBtn" onclick="toggleVoice()" title="Voice Input">🎤</button>
+                <textarea
+                  id="chatInput"
+                  placeholder="Ask about crime patterns, suspects, hotspots... (English or ಕನ್ನಡ)"
+                  rows="2"
+                  onkeydown="handleKeydown(event)"></textarea>
+                <button class="send-btn" onclick="sendMessage()" id="sendBtn">
+                  <span>Send</span> ➤
+                </button>
+              </div>
+              <div class="voice-status" id="voiceStatus"></div>
+            </div>
+          </div>
+
+          <!-- Chart panel -->
+          <div class="chart-panel" id="chartPanel">
+            <div class="chart-panel-header">
+              <h3 id="chartTitle">📊 Visualization</h3>
+              <button class="icon-btn" onclick="toggleChartPanel()">✕</button>
+            </div>
+            <div class="chart-container">
+              <canvas id="responseChart"></canvas>
+            </div>
+            <div id="tableContainer" class="table-container" style="display:none"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── TAB: DASHBOARD ──────────────────────────────────────────────── -->
+      <section id="tab-dashboard" class="tab-pane">
+        <div class="dashboard-header">
+          <h2>📊 Crime Intelligence Dashboard</h2>
+          <span id="dashTimestamp" class="timestamp"></span>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="kpi-grid" id="kpiGrid">
+          <div class="kpi-card">
+            <div class="kpi-icon">📁</div>
+            <div class="kpi-value" id="kpi-total">—</div>
+            <div class="kpi-label">Total FIR Cases</div>
+          </div>
+          <div class="kpi-card warning">
+            <div class="kpi-icon">⏳</div>
+            <div class="kpi-value" id="kpi-pending">—</div>
+            <div class="kpi-label">Pending Investigation</div>
+          </div>
+          <div class="kpi-card danger">
+            <div class="kpi-icon">🚨</div>
+            <div class="kpi-value" id="kpi-wanted">—</div>
+            <div class="kpi-label">Accused Wanted</div>
+          </div>
+          <div class="kpi-card success">
+            <div class="kpi-icon">✅</div>
+            <div class="kpi-value" id="kpi-clearance">—</div>
+            <div class="kpi-label">Clearance Rate</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon">👥</div>
+            <div class="kpi-value" id="kpi-accused">—</div>
+            <div class="kpi-label">Total Accused</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon">🏥</div>
+            <div class="kpi-value" id="kpi-victims">—</div>
+            <div class="kpi-label">Total Victims</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon">🏫</div>
+            <div class="kpi-value" id="kpi-stations">—</div>
+            <div class="kpi-label">Police Stations</div>
+          </div>
+          <div class="kpi-card info">
+            <div class="kpi-icon">🔝</div>
+            <div class="kpi-value" id="kpi-topcrime" style="font-size:1rem">—</div>
+            <div class="kpi-label">Top Crime Type</div>
+          </div>
+        </div>
+
+        <!-- Dashboard Charts Grid -->
+        <div class="charts-grid">
+          <div class="chart-card wide">
+            <h3>Crime Trend by Year</h3>
+            <canvas id="dash-trend"></canvas>
+          </div>
+          <div class="chart-card">
+            <h3>Crime Type Distribution</h3>
+            <canvas id="dash-type"></canvas>
+          </div>
+          <div class="chart-card">
+            <h3>Case Status</h3>
+            <canvas id="dash-status"></canvas>
+          </div>
+          <div class="chart-card wide">
+            <h3>Top 15 Districts by Crime Count</h3>
+            <canvas id="dash-district"></canvas>
+          </div>
+          <div class="chart-card">
+            <h3>Arrest Status</h3>
+            <canvas id="dash-arrest"></canvas>
+          </div>
+          <div class="chart-card">
+            <h3>Severity Distribution</h3>
+            <canvas id="dash-severity"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── TAB: ANALYTICS ─────────────────────────────────────────────── -->
+      <section id="tab-analytics" class="tab-pane">
+        <div class="analytics-header">
+          <h2>📈 Advanced Analytics</h2>
+          <div class="filter-bar">
+            <select id="analyticsYear" onchange="loadAnalytics()">
+              <option value="">All Years</option>
+              <option value="2019">2019</option>
+              <option value="2020">2020</option>
+              <option value="2021">2021</option>
+              <option value="2022">2022</option>
+              <option value="2023">2023</option>
+              <option value="2024">2024</option>
+              <option value="2025">2025</option>
+            </select>
+          </div>
+        </div>
+        <div class="charts-grid">
+          <div class="chart-card wide">
+            <h3>Monthly Crime Trend (18 months)</h3>
+            <canvas id="ana-monthly"></canvas>
+          </div>
+          <div class="chart-card wide">
+            <h3>Top 10 Crime Hotspot Stations</h3>
+            <canvas id="ana-hotspot"></canvas>
+          </div>
+          <div class="chart-card">
+            <h3>Stolen Property Recovery</h3>
+            <canvas id="ana-property"></canvas>
+          </div>
+          <div class="chart-card">
+            <h3>Accused Gender Breakdown</h3>
+            <canvas id="ana-gender"></canvas>
+          </div>
+        </div>
+
+        <!-- Predictive Warning Box -->
+        <div class="prediction-box">
+          <h3>🔮 AI Predictive Insights</h3>
+          <div id="predictiveText" class="prediction-content">
+            Loading predictive analysis...
+          </div>
+        </div>
+      </section>
+
+      <!-- ── TAB: HEATMAP ───────────────────────────────────────────────── -->
+      <section id="tab-heatmap" class="tab-pane">
+        <div class="heatmap-header">
+          <h2>🗺️ Crime Heatmap – Karnataka</h2>
+          <div class="filter-bar">
+            <select id="hmCrimeType" onchange="loadHeatmap()">
+              <option value="">All Crime Types</option>
+              <option>Murder</option>
+              <option>Theft</option>
+              <option>Robbery</option>
+              <option>Rape</option>
+              <option>Cybercrime</option>
+              <option>Drug Trafficking</option>
+              <option>Vehicle Theft</option>
+              <option>Kidnapping</option>
+            </select>
+            <select id="hmYear" onchange="loadHeatmap()">
+              <option value="">All Years</option>
+              <option>2025</option><option>2024</option><option>2023</option>
+              <option>2022</option><option>2021</option><option>2020</option>
+              <option>2019</option>
+            </select>
+          </div>
+        </div>
+        <div id="karnataka-map" class="map-container">
+          <div class="map-placeholder">
+            <div class="map-inner">
+              <canvas id="heatmapCanvas" width="800" height="600"></canvas>
+              <div class="map-legend">
+                <div class="legend-title">Incident Density</div>
+                <div class="legend-gradient"></div>
+                <div class="legend-labels"><span>Low</span><span>High</span></div>
+              </div>
+              <div id="heatmap-stats" class="heatmap-stats"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── TAB: NETWORK ───────────────────────────────────────────────── -->
+      <section id="tab-network" class="tab-pane">
+        <div class="network-header">
+          <h2>🕸️ Criminal Network Visualization</h2>
+          <p class="subtitle">Connections between co-accused sharing gang affiliations</p>
+          <div class="network-legend">
+            <span class="legend-item"><span class="dot red"></span> Wanted / Absconding</span>
+            <span class="legend-item"><span class="dot blue"></span> Arrested</span>
+          </div>
+        </div>
+        <div id="network-graph" class="network-container"></div>
+        <div id="network-info" class="network-info-panel">
+          Click a node to see criminal details
+        </div>
+      </section>
+
+      <!-- ── TAB: AUDIT ─────────────────────────────────────────────────── -->
+      <section id="tab-audit" class="tab-pane">
+        <div class="audit-header">
+          <h2>📋 Audit Trail & Explainability</h2>
+          <p class="subtitle">Full transparency of AI decisions – every query, every SQL, every result</p>
+        </div>
+        <div id="auditLog" class="audit-log">
+          <div class="audit-empty">No queries yet. Start a conversation in the AI Chat tab.</div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ── MODALS ──────────────────────────────────────────────────────────── -->
+  <div id="loadingOverlay" class="loading-overlay" style="display:none">
+    <div class="loading-spinner">
+      <div class="spinner"></div>
+      <div id="loadingText">Processing query...</div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" style="display:none"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
