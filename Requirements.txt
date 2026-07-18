@@ -1,0 +1,24 @@
+Solution
+
+It should enable users to discover hidden relationships between crimes, offenders, victims, locations, and socio-economic patterns, support investigative decision making, and provide predictive and preventive insights to strengthen proactive law enforcement.
+The platform should go beyond simple data retrieval and enable:
+• Crime pattern discovery
+• Criminal network analysis
+• Socio-demographic crime insights
+• Behavioural and criminological profiling
+• Proactive crime prevention intelligence
+
+
+Key Features
+
+• Natural language chatbot (English + Kannada)
+• Voice-enabled interaction
+• Context-aware conversations
+• PDF export of conversation history
+• Criminal network visualization
+• Crime trend & hotspot detection
+• Predictive analytics & early warnings
+• Explainable AI with audit trails
+• Role-based secure access
+
+From technology perspective deploy front-end using Catalyst Slate and backend using Catalyst Serverless Functions or AppSail (which supports Spring Boot or Flask), use Catalyst’s in-house AI service, QuickML (which provides GLM 4.7 and Qwen 3.6), Retrieval-Augmented Generation (RAG) for document querying, and custom pipeline builders for anomaly or fraud detection models.
