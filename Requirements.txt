@@ -25,6 +25,17 @@ From technology perspective deploy front-end using Catalyst Slate and backend us
 (which supports Spring Boot or Flask), use Catalyst’s in-house AI service, QuickML (which provides GLM 4.7 and Qwen 3.6), 
 Retrieval-Augmented Generation (RAG) for document querying, and custom pipeline builders for anomaly or fraud detection models.
 
+Staus : 18 July
+• Natural language chatbot (English + Kannada) --> Implemented
+• Voice-enabled interaction --> Need to check and confirm it with agent
+• Context-aware conversations --> Implemented
+• PDF export of conversation history --> Implemented
+• Criminal network visualization --> Implemented
+• Crime trend & hotspot detection--> Implemented
+• Predictive analytics & early warnings --> Partial
+• Explainable AI with audit trails --> Implemented
+• Role-based secure access --> --> Need to check and confirm it with agent
+
 Zoho user id / password
 mail2pradeepraj@gmail.com / #1Solarpinealgland 
 
