@@ -5,9 +5,162 @@ Handles NL -> SQL translation, response generation, pattern analysis
 import re
 import json
 import sqlite3
+import time
 from datetime import datetime
 from typing import Optional, List, Tuple
 import os
+
+try:
+    import requests as _requests
+except ImportError:  # pragma: no cover
+    _requests = None
+
+
+# ── Catalyst QuickML (GLM-4.7-Flash) integration ─────────────────────────────
+# Provides an optional LLM-generated natural-language insight layered on top
+# of the deterministic SQL-driven response. Falls back silently (returns
+# None) if credentials are missing or the call fails, so the chatbot keeps
+# working even when QuickML is unavailable.
+
+_QUICKML_ACCOUNTS_URL = os.environ.get("QUICKML_ACCOUNTS_URL", "https://accounts.zoho.in")
+_QUICKML_CLIENT_ID = os.environ.get("QUICKML_CLIENT_ID")
+_QUICKML_CLIENT_SECRET = os.environ.get("QUICKML_CLIENT_SECRET")
+_QUICKML_REFRESH_TOKEN = os.environ.get("QUICKML_REFRESH_TOKEN")
+_QUICKML_GLM_ENDPOINT = os.environ.get(
+    "QUICKML_GLM_ENDPOINT",
+    "https://api.catalyst.zoho.in/quickml/v1/project/51742000000028001/glm/chat",
+)
+_QUICKML_ORG_ID = os.environ.get("QUICKML_ORG_ID", "60078097690")
+_QUICKML_MODEL = "crm-di-glm47b_30b_it"
+
+_quickml_token_cache = {"access_token": None, "expires_at": 0}
+
+
+def _get_quickml_access_token() -> Optional[str]:
+    """Return a cached/valid QuickML OAuth access token, refreshing if needed."""
+    if not (_QUICKML_CLIENT_ID and _QUICKML_CLIENT_SECRET and _QUICKML_REFRESH_TOKEN):
+        return None
+    if _requests is None:
+        return None
+
+    now = time.time()
+    if _quickml_token_cache["access_token"] and _quickml_token_cache["expires_at"] > now + 60:
+        return _quickml_token_cache["access_token"]
+
+    try:
+        resp = _requests.post(
+            f"{_QUICKML_ACCOUNTS_URL}/oauth/v2/token",
+            data={
+                "grant_type": "refresh_token",
+                "client_id": _QUICKML_CLIENT_ID,
+                "client_secret": _QUICKML_CLIENT_SECRET,
+                "refresh_token": _QUICKML_REFRESH_TOKEN,
+            },
+            timeout=10,
+        )
+        data = resp.json()
+        token = data.get("access_token")
+        if not token:
+            return None
+        _quickml_token_cache["access_token"] = token
+        _quickml_token_cache["expires_at"] = now + int(data.get("expires_in", 3600))
+        return token
+    except Exception:
+        return None
+
+
+def generate_llm_insight(user_query: str, data_summary: str) -> Optional[str]:
+    """
+    Call Catalyst QuickML's GLM-4.7-Flash LLM Serving endpoint to produce a
+    short natural-language insight/summary grounded in the SQL results.
+    Returns None if QuickML is not configured or the call fails (caller
+    should gracefully fall back to the deterministic response).
+
+    Note: the GLM endpoint's safety layer rejects requests that use the
+    "system" role (treats it as a prompt-injection attempt), so instructions
+    are folded into the "user" message instead.
+    """
+    token = _get_quickml_access_token()
+    if not token:
+        return None
+
+    prompt = (
+        "You are KRIME AI, a crime-intelligence assistant for Karnataka State Police. "
+        "Based ONLY on the data below, write a concise (2-3 sentence) analytical insight "
+        "for an investigating officer. Do not invent numbers not present in the data. "
+        "IMPORTANT: Output ONLY the finished 2-3 sentence insight as plain prose. "
+        "Do NOT show your thinking, drafts, numbered steps, or any text other than "
+        "the finished insight itself. Start your reply directly with the insight text.\n\n"
+        f"Officer's question: {user_query}\n\n"
+        f"Query result data:\n{data_summary}\n\n"
+        "ANSWER_ONLY>>>"
+    )
+
+    try:
+        resp = _requests.post(
+            _QUICKML_GLM_ENDPOINT,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Zoho-oauthtoken {token}",
+                "CATALYST-ORG": _QUICKML_ORG_ID,
+            },
+            json={
+                "model": _QUICKML_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                # This model ("thinking" variant) emits a <think>...</think>
+                # reasoning trace before the real answer, which can consume
+                # several hundred tokens on its own -- budget generously so
+                # the final answer isn't truncated mid-sentence.
+                "max_tokens": 1500,
+                "temperature": 0.3,
+                "stream": False,
+            },
+            timeout=30,
+        )
+        data = resp.json()
+        text = (data.get("response") or "").strip()
+        return _clean_llm_output(text) or None
+    except Exception:
+        return None
+
+
+def _clean_llm_output(text: str) -> str:
+    """
+    Strip visible chain-of-thought / step-by-step reasoning that some models
+    emit despite instructions, keeping only the final answer text.
+    """
+    if not text:
+        return text
+    # GLM's "thinking" models wrap reasoning in <think>...</think> tags and
+    # place the real answer right after the closing tag.
+    if "</think>" in text:
+        text = text.split("</think>", 1)[1].strip()
+        if text:
+            return text.strip('"').strip()
+    # If the model used a numbered "reasoning steps" format, take content
+    # after the last occurrence of a "final" marker if present.
+    markers = [
+        "answer_only>>>", "final polish:", "final insight:", "final answer:",
+        "final version:", "insight:",
+    ]
+    lowered = text.lower()
+    for marker in markers:
+        idx = lowered.rfind(marker)
+        if idx != -1:
+            text = text[idx + len(marker):].strip()
+            lowered = text.lower()
+    # Drop numbered step lines like "1. **Analyze..." if the whole thing is
+    # still clearly a reasoning trace (starts with a digit + period).
+    if re.match(r"^\s*\d+\.\s", text) or "*draft" in lowered:
+        # Keep only the last paragraph, which is usually the drafted answer.
+        paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+        if paragraphs:
+            text = paragraphs[-1]
+        # Remove leading "*Draft N:*" style prefixes and stray leading quotes
+        text = re.sub(r"^\*+\s*Draft\s*\d*\**:?\s*", "", text, flags=re.IGNORECASE).strip()
+        text = text.strip('"').strip()
+    return text.strip()
+
 
 # --- Kannada <-> English keyword map ---
 KANNADA_KEYWORD_MAP = {
@@ -444,7 +597,29 @@ def _build_markdown_table(rows: list, columns: list, title: str, intro: str = ""
 
 
 def generate_natural_response(query: str, intents: list, results: list, chart_type: str) -> str:
-    """Generate a human-readable response from query results"""
+    """
+    Generate a human-readable response from query results.
+    Builds the deterministic, explainable (SQL-backed) response first, then
+    layers an optional AI-generated insight from Catalyst QuickML's
+    GLM-4.7-Flash LLM on top -- giving investigators both the auditable data
+    table AND a natural-language analytical summary.
+    """
+    base_response = _generate_deterministic_response(query, intents, results, chart_type)
+
+    intent = intents[0] if intents else "general"
+    if intent == "greeting" or not results or "error" in results[0]:
+        return base_response
+
+    # Summarize just enough data for the LLM prompt (keep payload small)
+    data_summary = json.dumps(results[:15], default=str, ensure_ascii=False)
+    insight = generate_llm_insight(query, data_summary)
+    if insight:
+        return f"{base_response}\n\n---\n🧠 **AI Insight (QuickML · GLM-4.7-Flash):** {insight}"
+    return base_response
+
+
+def _generate_deterministic_response(query: str, intents: list, results: list, chart_type: str) -> str:
+    """Rule-based, explainable response builder (original implementation)."""
     if intents and intents[0] == "greeting":
         return "Hello! 👋 I’m KSP Crime Intelligence AI. I can help you explore crime trends, district-wise patterns, suspect details, hotspots, and case status. What would you like to know today?"
 
