@@ -12,5 +12,14 @@
   },
   "client": {
     "source": "client"
+  },
+  "slate": [
+    {
+      "name": "krime-ai-slate",
+      "source": "public"
+    }
+  ],
+  "apig": {
+    "enabled": false
   }
 }

@@ -4,9 +4,15 @@
    ============================================================ */
 
 // ── Config ────────────────────────────────────────────────────────────────
+// Backend Advanced I/O function absolute URL (used when frontend is hosted on
+// a different domain, e.g. Catalyst Slate at onslate.in).
+const CATALYST_FUNCTION_URL = "https://krime-ai-60078097690.development.catalystserverless.in/server/crime-chat-function";
+
 const API_BASE = window.location.hostname === "localhost"
   ? "http://localhost:3000"
-  : "/server/crime-chat-function";   // Catalyst Advanced I/O function path
+  : window.location.hostname.endsWith("catalystserverless.in")
+    ? "/server/crime-chat-function"   // same-origin Catalyst Web Client hosting
+    : CATALYST_FUNCTION_URL;          // cross-origin hosting (e.g. Slate)
 
 const DEFAULT_SUGGESTIONS = [
   "How many total crimes are registered in Karnataka?",
@@ -130,7 +136,7 @@ async function sendMessage() {
   try {
     const res = await fetch(`${API_BASE}/api/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ query, language: currentLang, session_id: sessionId })
     });
     const data = await res.json();
@@ -239,7 +245,7 @@ async function fetchSuggestions(lastIntent) {
   try {
     const res = await fetch(`${API_BASE}/api/suggest`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ last_intent: lastIntent })
     });
     const data = await res.json();
@@ -378,7 +384,7 @@ async function loadDashChart(canvasId, chartId, defaultType) {
   try {
     const res = await fetch(`${API_BASE}/api/chart-data`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ chart_id: chartId })
     });
     const d = await res.json();
@@ -446,7 +452,7 @@ async function loadPredictive() {
   try {
     const res = await fetch(`${API_BASE}/api/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ query: "predict crime trend next months early warning", language: "en", session_id: sessionId })
     });
     const d = await res.json();
@@ -665,7 +671,7 @@ async function exportPDF() {
   try {
     const res = await fetch(`${API_BASE}/api/export-pdf`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({
         conversation,
         title: "KRIME AI Investigation Report",
