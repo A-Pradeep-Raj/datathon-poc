@@ -21,7 +21,11 @@ Key Features
 • Explainable AI with audit trails
 • Role-based secure access
 
-From technology perspective deploy front-end using Catalyst Slate and backend using Catalyst Serverless Functions or AppSail (which supports Spring Boot or Flask), use Catalyst’s in-house AI service, QuickML (which provides GLM 4.7 and Qwen 3.6), Retrieval-Augmented Generation (RAG) for document querying, and custom pipeline builders for anomaly or fraud detection models.
+From technology perspective deploy front-end using Catalyst Slate and backend using Catalyst Serverless Functions or AppSail
+(which supports Spring Boot or Flask), use Catalyst’s in-house AI service, QuickML (which provides GLM 4.7 and Qwen 3.6), 
+Retrieval-Augmented Generation (RAG) for document querying, and custom pipeline builders for anomaly or fraud detection models.
 
 Zoho user id / password
 mail2pradeepraj@gmail.com / #1Solarpinealgland 
+
+Zoho App URL: https://krime-ai-60078097690.development.catalystserverless.in/app/index.html
