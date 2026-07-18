@@ -1,0 +1,86 @@
+station_id,station_name,district_name,case_count,avg_severity,pending_count,high_severity_count,is_hotspot_anomaly
+70,Hassan Station 3,Hassan,25,6.04,6,8,1
+20,Jayalakshmipuram,Mysuru,25,5.76,5,7,0
+13,Kanakapura,Bengaluru Rural,25,5.68,3,6,0
+8,JP Nagar,Bengaluru Urban,24,5.92,4,6,0
+73,Chitradurga Station 3,Chitradurga,23,6.26,4,7,1
+58,Davanagere Station 3,Davanagere,23,6.26,7,7,1
+52,Bhadravati,Shivamogga,23,5.78,3,4,0
+68,Hassan Station 1,Hassan,22,6.27,2,5,1
+48,Chikkanayakanahalli,Tumakuru,22,6.23,2,9,1
+26,Hubballi Town,Hubballi-Dharwad,22,6.41,3,9,1
+24,Bajpe,Mangaluru,22,6.18,2,7,1
+19,Vijayanagar,Mysuru,22,5.59,4,3,0
+18,Saraswathipuram,Mysuru,22,5.77,2,5,0
+15,Doddaballapur,Bengaluru Rural,22,5.5,2,3,0
+7,Electronic City,Bengaluru Urban,22,5.82,3,5,0
+78,Chikkamagaluru Station 2,Chikkamagaluru,21,6.29,5,6,0
+64,Raichur Station 3,Raichur,21,5.33,2,3,0
+9,Indiranagar,Bengaluru Urban,21,6.14,0,5,0
+72,Chitradurga Station 2,Chitradurga,20,6.2,2,6,0
+57,Davanagere Station 2,Davanagere,20,6.0,4,5,0
+50,Pavagada,Tumakuru,20,6.3,2,7,0
+36,Kalaburagi Town,Kalaburagi,20,5.55,1,3,0
+33,Tilakwadi,Belagavi,20,6.4,1,8,0
+32,Belagavi Town,Belagavi,20,6.0,6,5,0
+27,Dharwad,Hubballi-Dharwad,20,6.7,2,7,0
+23,Konkanpady,Mangaluru,20,5.8,0,4,0
+17,Lakshmipuram,Mysuru,20,6.15,3,6,0
+16,Nazarbad,Mysuru,20,6.25,5,7,0
+10,HSR Layout,Bengaluru Urban,20,6.15,2,5,0
+1,Cubbon Park,Bengaluru Urban,20,5.8,7,6,0
+65,Bidar Station 1,Bidar,19,6.89,2,9,0
+63,Raichur Station 2,Raichur,19,7.21,3,12,0
+49,Sira,Tumakuru,19,6.05,5,5,0
+39,Sedam,Kalaburagi,19,5.74,4,4,0
+34,Udyambag,Belagavi,19,5.84,1,4,0
+12,Channapatna,Bengaluru Rural,19,5.58,3,4,0
+5,Hebbal,Bengaluru Urban,19,5.89,2,4,0
+82,Kodagu Station 3,Kodagu,18,6.11,5,7,0
+77,Chikkamagaluru Station 1,Chikkamagaluru,18,6.5,2,8,0
+75,Udupi Station 2,Udupi,18,6.17,2,6,0
+53,Shimoga Rural,Shivamogga,18,5.89,1,3,0
+46,Tumakuru Town,Tumakuru,18,6.06,4,6,0
+44,Kudligi,Ballari,18,5.89,4,2,0
+40,Yadgir,Kalaburagi,18,6.17,2,4,0
+37,Aland,Kalaburagi,18,6.67,2,9,0
+35,Vadgaon,Belagavi,18,5.56,2,3,0
+25,Ullal,Mangaluru,18,5.72,0,4,0
+2,MG Road,Bengaluru Urban,18,5.83,5,2,0
+81,Kodagu Station 2,Kodagu,17,5.76,6,5,0
+74,Udupi Station 1,Udupi,17,6.24,2,6,0
+60,Vijayapura Station 2,Vijayapura,17,5.94,1,3,0
+55,Soraba,Shivamogga,17,6.18,1,4,0
+54,Sagar,Shivamogga,17,6.47,2,6,0
+38,Chittapur,Kalaburagi,17,7.24,3,10,0
+29,Tarihal,Hubballi-Dharwad,17,6.29,3,6,0
+28,Gabbur,Hubballi-Dharwad,17,5.76,0,4,0
+14,Nelamangala,Bengaluru Rural,17,6.0,3,5,0
+71,Chitradurga Station 1,Chitradurga,16,6.94,6,8,0
+69,Hassan Station 2,Hassan,16,6.75,3,7,0
+22,Mangaluru South,Mangaluru,16,6.12,0,6,0
+76,Udupi Station 3,Udupi,15,5.8,3,5,0
+67,Bidar Station 3,Bidar,15,5.6,4,4,0
+62,Raichur Station 1,Raichur,15,5.73,2,4,0
+45,Siruguppa,Ballari,15,6.67,4,5,0
+41,Ballari Town,Ballari,15,6.33,2,4,0
+21,Mangaluru North,Mangaluru,15,5.6,1,4,0
+11,Ramanagara,Bengaluru Rural,15,5.73,1,1,0
+84,Gadag Station 2,Gadag,14,6.07,1,3,0
+31,Belagavi Camp,Belagavi,14,5.57,3,4,0
+4,Whitefield,Bengaluru Urban,14,6.71,2,7,0
+66,Bidar Station 2,Bidar,13,6.38,1,4,0
+61,Vijayapura Station 3,Vijayapura,13,5.15,3,1,0
+56,Davanagere Station 1,Davanagere,13,5.92,2,2,0
+43,Hospet,Ballari,13,5.0,2,2,0
+85,Gadag Station 3,Gadag,12,5.83,1,2,0
+59,Vijayapura Station 1,Vijayapura,12,6.17,1,6,0
+42,Sandur,Ballari,12,5.83,2,3,0
+6,Yelahanka,Bengaluru Urban,12,6.08,1,2,0
+83,Gadag Station 1,Gadag,11,5.73,3,3,0
+80,Kodagu Station 1,Kodagu,11,6.09,2,3,0
+79,Chikkamagaluru Station 3,Chikkamagaluru,11,5.27,1,2,0
+30,Navalur,Hubballi-Dharwad,11,6.45,0,3,0
+3,Koramangala,Bengaluru Urban,11,6.0,2,3,0
+51,Shivamogga Town,Shivamogga,10,6.1,2,3,0
+47,Tiptur,Tumakuru,9,5.33,0,1,0

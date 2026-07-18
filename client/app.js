@@ -135,6 +135,52 @@ async function askRagQuestion(presetQuestion) {
   input.value = "";
 }
 
+// ── ANOMALY DETECTION (QuickML AutoML Pipeline) ──────────────────
+async function runAnomalyScan() {
+  const resultsEl = document.getElementById("anomalyResults");
+  resultsEl.innerHTML = `<div class="rag-loading">🔍 Scanning all police stations via QuickML model…</div>`;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/anomaly-scan`, { method: "GET" });
+    const data = await res.json();
+
+    if (!data.success) {
+      resultsEl.innerHTML = `<div class="rag-error">❌ ${data.error || "Anomaly scan failed."}</div>`;
+      return;
+    }
+
+    if (data.anomaly_count === 0) {
+      resultsEl.innerHTML = `<div class="anomaly-none">✅ No anomalous hotspots detected among current stations.</div>`;
+      return;
+    }
+
+    const rows = data.anomalies.map(a => `
+      <tr>
+        <td>${a.station_name}</td>
+        <td>${a.district_name}</td>
+        <td>${a.case_count}</td>
+        <td>${a.avg_severity}</td>
+        <td>${a.pending_count}</td>
+        <td>${a.high_severity_count}</td>
+      </tr>
+    `).join("");
+
+    resultsEl.innerHTML = `
+      <div class="anomaly-summary">⚠️ <strong>${data.anomaly_count}</strong> station(s) flagged as anomalous hotspots requiring review:</div>
+      <div class="table-container">
+        <table class="anomaly-table">
+          <thead>
+            <tr><th>Station</th><th>District</th><th>Cases</th><th>Avg Severity</th><th>Pending</th><th>High Severity</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  } catch (e) {
+    resultsEl.innerHTML = `<div class="rag-error">❌ Error: ${e.message}</div>`;
+  }
+}
+
 // ── LANG ──────────────────────────────────────────────────────────────────
 function setLang(lang) {
   currentLang = lang;

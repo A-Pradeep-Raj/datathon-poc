@@ -452,6 +452,31 @@ html, body {
 .prediction-content { color: var(--text-secondary); line-height: 1.8; font-size: 13px; }
 .prediction-content strong { color: var(--text-primary); }
 
+.anomaly-box {
+  background: linear-gradient(135deg, rgba(234,67,53,0.1), rgba(251,188,4,0.05));
+  border-color: rgba(234,67,53,0.3);
+}
+.anomaly-box-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.anomaly-box-header h3 { color: var(--danger); margin-bottom: 0; }
+.anomaly-box .subtitle { margin-bottom: 14px; }
+.anomaly-results { color: var(--text-secondary); font-size: 13px; }
+.anomaly-summary { color: var(--text-primary); margin-bottom: 12px; font-size: 13px; }
+.anomaly-none { color: var(--success); }
+.anomaly-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.anomaly-table th {
+  text-align: left;
+  padding: 8px 10px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+.anomaly-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+.anomaly-table tr:hover td { background: rgba(234,67,53,0.08); }
+
 /* ── HEATMAP ─────────────────────────────────────────────────────────────── */
 .heatmap-header { margin-bottom: 20px; }
 .heatmap-header h2 { font-size: 18px; margin-bottom: 8px; }

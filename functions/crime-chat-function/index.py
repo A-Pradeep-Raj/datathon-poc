@@ -21,7 +21,8 @@ if sys.stderr.encoding != "utf-8":
 from synthetic_data import create_database
 from ai_engine import (
     translate_kannada_to_english, detect_intent, detect_greeting, build_sql_query,
-    execute_query, generate_natural_response, get_dashboard_stats, query_rag
+    execute_query, generate_natural_response, get_dashboard_stats, query_rag,
+    scan_stations_for_anomalies
 )
 
 app = Flask(__name__)
@@ -191,6 +192,33 @@ def rag_query():
             "answer": result["answer"],
             "sources": result["sources"],
             "error": result["error"],
+            "timestamp": datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/anomaly-scan", methods=["GET", "POST", "OPTIONS"])
+def anomaly_scan():
+    """
+    Custom QuickML pipeline endpoint: scans all police stations' crime
+    statistics through a trained AutoML classification model to flag
+    anomalous hotspots (potential fraud/under-reporting/resource-strain
+    indicators) requiring administrative review.
+    """
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+
+    try:
+        conn = get_db()
+        flagged = scan_stations_for_anomalies(conn)
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "anomaly_count": len(flagged),
+            "anomalies": flagged,
             "timestamp": datetime.now().isoformat()
         })
 

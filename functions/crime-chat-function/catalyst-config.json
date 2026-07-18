@@ -13,6 +13,8 @@
       "QUICKML_GLM_ENDPOINT": "https://api.catalyst.zoho.in/quickml/v1/project/51742000000028001/glm/chat",
       "QUICKML_RAG_ENDPOINT": "https://console.catalyst.zoho.in/quickml/v1/project/51742000000028001/rag/answer",
       "QUICKML_KB_DOC_IDS": "6447000000002020",
+      "QUICKML_ANOMALY_ENDPOINT": "https://api.catalyst.zoho.in/quickml/v1/project/51742000000028001/endpoints/predict",
+      "QUICKML_ANOMALY_ENDPOINT_KEY": "03d0b6bc68e5faa6dfc2be94384194682c21095e70d6832328a5e20cfa2d773e1355eac9a9b7126e1c144652bf3223d4",
       "QUICKML_ORG_ID": "60078097690"
     }
   },

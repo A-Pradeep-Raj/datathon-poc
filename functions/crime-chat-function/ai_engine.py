@@ -44,6 +44,14 @@ _QUICKML_KB_DOC_IDS = [
     d.strip() for d in os.environ.get("QUICKML_KB_DOC_IDS", "").split(",") if d.strip()
 ]
 
+# Custom QuickML pipeline endpoint for crime-hotspot anomaly/fraud detection
+# (AutoML classification model trained on per-station case statistics).
+_QUICKML_ANOMALY_ENDPOINT = os.environ.get(
+    "QUICKML_ANOMALY_ENDPOINT",
+    "https://api.catalyst.zoho.in/quickml/v1/project/51742000000028001/endpoints/predict",
+)
+_QUICKML_ANOMALY_ENDPOINT_KEY = os.environ.get("QUICKML_ANOMALY_ENDPOINT_KEY")
+
 _quickml_token_cache = {"access_token": None, "expires_at": 0}
 
 
@@ -231,6 +239,81 @@ def query_rag(question: str, document_ids: Optional[List[str]] = None) -> dict:
         }
     except Exception as e:
         return {"success": False, "answer": None, "sources": [], "error": str(e)}
+
+
+def predict_station_anomaly(station_stats: dict) -> dict:
+    """
+    Call the custom QuickML pipeline endpoint (AutoML classification model) to
+    predict whether a police station's crime statistics indicate an anomalous
+    hotspot (potential under-reporting, resource strain, or unusual activity
+    spike) requiring investigative/administrative attention.
+
+    station_stats must contain: station_id, station_name, district_name,
+    case_count, avg_severity, pending_count, high_severity_count.
+
+    Returns: {"success": bool, "is_anomaly": bool|None, "error": str|None}
+    """
+    token = _get_quickml_access_token()
+    if not token or not _QUICKML_ANOMALY_ENDPOINT_KEY:
+        return {"success": False, "is_anomaly": None, "error": "Anomaly detection endpoint is not configured."}
+
+    required = ["station_id", "station_name", "district_name", "case_count",
+                "avg_severity", "pending_count", "high_severity_count"]
+    missing = [k for k in required if k not in station_stats]
+    if missing:
+        return {"success": False, "is_anomaly": None, "error": f"Missing fields: {', '.join(missing)}"}
+
+    try:
+        resp = _requests.post(
+            _QUICKML_ANOMALY_ENDPOINT,
+            headers={
+                "Content-Type": "application/json",
+                "X-QUICKML-ENDPOINT-KEY": _QUICKML_ANOMALY_ENDPOINT_KEY,
+                "Authorization": f"Zoho-oauthtoken {token}",
+                "CATALYST-ORG": _QUICKML_ORG_ID,
+                "Environment": "Development",
+            },
+            json={"data": {k: station_stats[k] for k in required}},
+            timeout=20,
+        )
+        data = resp.json()
+        if data.get("status") != "success":
+            return {"success": False, "is_anomaly": None, "error": data.get("message") or "Prediction failed."}
+        result = data.get("result", [None])[0]
+        return {"success": True, "is_anomaly": bool(result), "error": None}
+    except Exception as e:
+        return {"success": False, "is_anomaly": None, "error": str(e)}
+
+
+def scan_stations_for_anomalies(conn) -> list:
+    """
+    Compute per-station crime statistics from the live database and run each
+    station through the QuickML anomaly-detection endpoint, returning the
+    list of stations flagged as anomalous hotspots.
+    """
+    c = conn.cursor()
+    c.execute("""
+        SELECT ps.station_id, ps.station_name, d.district_name,
+               COUNT(*) as case_count,
+               AVG(f.severity_score) as avg_severity,
+               SUM(CASE WHEN f.status='Pending Investigation' THEN 1 ELSE 0 END) as pending_count,
+               SUM(CASE WHEN f.severity_score >= 8 THEN 1 ELSE 0 END) as high_severity_count
+        FROM fir_cases f
+        JOIN police_stations ps ON f.station_id = ps.station_id
+        JOIN districts d ON ps.district_id = d.district_id
+        GROUP BY ps.station_id
+        ORDER BY case_count DESC
+    """)
+    cols = [d[0] for d in c.description]
+    rows = [dict(zip(cols, r)) for r in c.fetchall()]
+
+    flagged = []
+    for row in rows:
+        row["avg_severity"] = round(row["avg_severity"] or 0, 2)
+        result = predict_station_anomaly(row)
+        if result["success"] and result["is_anomaly"]:
+            flagged.append(row)
+    return flagged
 
 
 # --- Kannada <-> English keyword map ---

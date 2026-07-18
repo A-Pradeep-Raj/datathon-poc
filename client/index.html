@@ -253,6 +253,16 @@
             Loading predictive analysis...
           </div>
         </div>
+
+        <!-- Anomaly Detection Box (Catalyst QuickML AutoML pipeline) -->
+        <div class="prediction-box anomaly-box">
+          <div class="anomaly-box-header">
+            <h3>🚨 AI Anomaly Detection · Crime Hotspots (QuickML)</h3>
+            <button class="send-btn" onclick="runAnomalyScan()">Scan Stations</button>
+          </div>
+          <p class="subtitle">Flags police stations whose case volume &amp; severity patterns deviate significantly from normal, using a trained QuickML classification model</p>
+          <div id="anomalyResults" class="anomaly-results">Click "Scan Stations" to run the AI anomaly scan.</div>
+        </div>
       </section>
 
       <!-- ── TAB: HEATMAP ───────────────────────────────────────────────── -->
