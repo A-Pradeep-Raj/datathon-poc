@@ -136,12 +136,22 @@ def chat():
 
         conn = get_db()
 
-        # Build and execute SQL
-        sql, params, chart_type = build_sql_query(intents[0], translated_query, conn)
+        # Load prior conversation context for this session (district/year/
+        # crime_type last discussed), so follow-up questions like "what
+        # about theft there?" can resolve "there" from earlier turns.
+        prior_context = _get_session_context(conn, session_id)
+
+        # Build and execute SQL, resolving entities against prior context
+        sql, params, chart_type, resolved = build_sql_query(intents[0], translated_query, conn, prior_context)
         results = execute_query(conn, sql, params)
 
-        # Generate natural language response
-        response_text = generate_natural_response(translated_query, intents, results, chart_type)
+        # Generate natural language response (includes a transparency note
+        # when context was carried over from earlier in the conversation)
+        response_text = generate_natural_response(translated_query, intents, results, chart_type, resolved)
+
+        # Persist the resolved context so the NEXT turn in this session can
+        # build on it.
+        _save_session_context(conn, session_id, resolved, intents[0])
 
         # Audit log
         _log_query(conn, session_id, user_query, translated_query, intents, sql, len(results))
@@ -158,6 +168,12 @@ def chat():
             "data": results[:100],  # limit payload
             "total_records": len(results),
             "sql": sql,  # for explainability/audit trail
+            "context_used": resolved.get("context_used", {}),  # which entities (if any) were carried over
+            "resolved_entities": {
+                "district": resolved.get("district"),
+                "year": resolved.get("year"),
+                "crime_type": resolved.get("crime_type"),
+            },
             "timestamp": datetime.now().isoformat()
         })
 
@@ -496,6 +512,25 @@ def export_pdf():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route("/api/reset-context", methods=["POST", "OPTIONS"])
+def reset_context():
+    """Explicitly clear the stored conversation context for a session
+    (called by the frontend when the user starts a 'New Chat')."""
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+    try:
+        body = request.get_json(force=True, silent=True) or {}
+        session_id = body.get("session_id", "default")
+        conn = get_db()
+        _ensure_session_context_table(conn)
+        conn.execute("DELETE FROM session_context WHERE session_id = ?", (session_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/api/init-db", methods=["POST"])
 def init_db():
     """Initialize / re-seed the synthetic database"""
@@ -509,6 +544,65 @@ def init_db():
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _ensure_session_context_table(conn):
+    conn.execute("""CREATE TABLE IF NOT EXISTS session_context (
+        session_id TEXT PRIMARY KEY,
+        last_district TEXT,
+        last_year TEXT,
+        last_crime_type TEXT,
+        last_intent TEXT,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP)""")
+
+
+def _get_session_context(conn, session_id: str) -> dict:
+    """Load the last-known district/year/crime_type for this session so the
+    current turn can resolve follow-up questions that omit those entities."""
+    try:
+        _ensure_session_context_table(conn)
+        row = conn.execute(
+            "SELECT last_district, last_year, last_crime_type, last_intent FROM session_context WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()
+        if not row:
+            return {}
+        district, year, crime_type, intent = row
+        return {
+            "district": district or None,
+            "year": int(year) if year else None,
+            "crime_type": crime_type or None,
+            "intent": intent or None,
+        }
+    except Exception:
+        return {}
+
+
+def _save_session_context(conn, session_id: str, resolved: dict, intent: str):
+    """Persist the resolved entities from this turn as the new session
+    context, so the next message in the same conversation can build on it."""
+    try:
+        _ensure_session_context_table(conn)
+        conn.execute(
+            """INSERT INTO session_context (session_id, last_district, last_year, last_crime_type, last_intent, updated_at)
+               VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+               ON CONFLICT(session_id) DO UPDATE SET
+                 last_district = excluded.last_district,
+                 last_year = excluded.last_year,
+                 last_crime_type = excluded.last_crime_type,
+                 last_intent = excluded.last_intent,
+                 updated_at = CURRENT_TIMESTAMP""",
+            (
+                session_id,
+                resolved.get("district"),
+                str(resolved.get("year")) if resolved.get("year") else None,
+                resolved.get("crime_type"),
+                intent,
+            ),
+        )
+        conn.commit()
+    except Exception:
+        pass  # non-critical
+
 
 def _log_query(conn, session_id, original, translated, intents, sql, result_count):
     try:

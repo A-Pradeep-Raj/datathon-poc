@@ -366,7 +366,8 @@ INTENT_PATTERNS = {
         r"top.*district",
     ],
     "crime_by_type": [
-        r"(murder|theft|robbery|rape|cybercrime|drug|dacoity|kidnapping|arson|burglary) (cases?|crimes?|statistics)?",
+        r"(murder|theft|robbery|rape|cybercrime|drug|dacoity|kidnapping|arson|burglary)(\s+(cases?|crimes?|statistics))?",
+        r"what about (murder|theft|robbery|rape|cybercrime|drug|dacoity|kidnapping|arson|burglary)",
         r"crimes? by type",
         r"type of crimes?",
         r"breakdown of crimes?",
@@ -528,26 +529,124 @@ def extract_crime_type(query: str) -> Optional[str]:
     return None
 
 
-# --- SQL Query Builder ---
-def build_sql_query(intent: str, query: str, db_conn) -> Tuple[str, list, str]:
-    """Returns (sql, params, chart_type)"""
+# --- Context-aware conversation helpers ---
+
+# Phrases that signal the user wants to start a fresh topic, so any
+# carried-over district/year/crime_type from the previous turn should be
+# discarded instead of bleeding into an unrelated question.
+_RESET_PHRASES = [
+    "start over", "new question", "never mind", "nevermind", "forget that",
+    "forget it", "reset", "different topic", "new topic", "change topic",
+    "unrelated question", "clear context",
+]
+
+# Which resolved entities are actually consumed by build_sql_query for a
+# given intent -- used to decide whether it's worth telling the user that
+# context was carried over from earlier in the conversation.
+_INTENT_RELEVANT_ENTITIES = {
+    "count_crimes": {"district", "crime_type", "year"},
+    "crime_by_district": {"year"},
+    "crime_by_type": {"district"},
+    "crime_trend": {"crime_type", "district"},
+}
+
+
+def _is_context_reset_request(query: str) -> bool:
+    """True if the user explicitly signals they want to drop prior context."""
+    q = query.lower()
+    return any(phrase in q for phrase in _RESET_PHRASES)
+
+
+def resolve_context_entities(query: str, session_context: Optional[dict] = None) -> Tuple[Optional[str], Optional[int], Optional[str], dict]:
+    """
+    Extract district/year/crime_type from the CURRENT query, falling back to
+    the last-known values from the conversation's session context whenever
+    the current query doesn't explicitly mention them. This is what powers
+    multi-turn, context-aware follow-up questions, e.g.:
+        "How many crimes in Mysuru?"        -> district=Mysuru (fresh)
+        "What about theft there?"           -> district=Mysuru (carried over), crime_type=Theft (fresh)
+        "Show me the trend"                 -> district=Mysuru, crime_type=Theft (both carried over)
+
+    Returns (district, year, crime_type, context_used) where context_used is
+    a dict of {entity_name: True} for every entity that came from session
+    context rather than the current query text.
+    """
+    session_context = session_context or {}
+
     district = extract_district(query)
     year = extract_year(query)
     crime_type = extract_crime_type(query)
 
+    context_used = {}
+
+    if district is None and session_context.get("district"):
+        district = session_context["district"]
+        context_used["district"] = True
+
+    if year is None and session_context.get("year"):
+        year = session_context["year"]
+        context_used["year"] = True
+
+    if crime_type is None and session_context.get("crime_type"):
+        crime_type = session_context["crime_type"]
+        context_used["crime_type"] = True
+
+    return district, year, crime_type, context_used
+
+
+def build_sql_query(intent: str, query: str, db_conn, session_context: Optional[dict] = None) -> Tuple[str, list, str, dict]:
+    """
+    Resolve entities (current query + carried-over session context), then
+    build the SQL for the given intent.
+
+    Returns (sql, params, chart_type, resolved) where `resolved` is
+    {"district", "year", "crime_type", "context_used"} describing exactly
+    what values were used and which of them were carried over from earlier
+    in the conversation -- this feeds both the response text (for
+    transparency/explainability) and the updated session context to persist.
+    """
+    if _is_context_reset_request(query):
+        session_context = {}
+
+    district, year, crime_type, context_used = resolve_context_entities(query, session_context)
+
+    sql, params, chart_type = _build_sql_query_core(intent, query, db_conn, district, year, crime_type)
+
+    # Only surface "used earlier context" for entities this intent actually
+    # consumes, so we don't tell the user we "remembered" something that had
+    # no bearing on the answer.
+    relevant = _INTENT_RELEVANT_ENTITIES.get(intent, set())
+    context_used = {k: v for k, v in context_used.items() if k in relevant}
+
+    resolved = {"district": district, "year": year, "crime_type": crime_type, "context_used": context_used}
+    return sql, params, chart_type, resolved
+
+
+def _build_sql_query_core(intent: str, query: str, db_conn, district: Optional[str], year: Optional[int], crime_type: Optional[str]) -> Tuple[str, list, str]:
+    """Returns (sql, params, chart_type) given already-resolved entities."""
     if intent == "count_crimes":
-        if district:
+        # Combine ALL resolved entities (district AND/OR crime_type AND/OR
+        # year) into a single filtered COUNT, instead of only honoring one
+        # at a time. This matters for context-aware follow-ups where one
+        # entity comes from the current query and another is carried over
+        # from earlier in the conversation (e.g. "what about theft?" after
+        # "crimes in Mysuru?" should count Theft cases IN Mysuru, not just Theft).
+        if district or crime_type or year:
             sql = """SELECT COUNT(*) as total_cases FROM fir_cases f
                      JOIN police_stations ps ON f.station_id = ps.station_id
                      JOIN districts d ON ps.district_id = d.district_id
-                     WHERE LOWER(d.district_name) LIKE ?"""
-            return sql, [f"%{district.lower()}%"], "number"
-        elif crime_type:
-            sql = "SELECT COUNT(*) as total_cases FROM fir_cases WHERE crime_type = ?"
-            return sql, [crime_type], "number"
-        elif year:
-            sql = "SELECT COUNT(*) as total_cases FROM fir_cases WHERE strftime('%Y', date_of_incident) = ?"
-            return sql, [str(year)], "number"
+                     WHERE 1=1"""
+            params = []
+            if district:
+                sql += " AND LOWER(d.district_name) LIKE ?"
+                params.append(f"%{district.lower()}%")
+            if crime_type:
+                sql += " AND f.crime_type = ?"
+                params.append(crime_type)
+            if year:
+                sql += " AND strftime('%Y', f.date_of_incident) = ?"
+                params.append(str(year))
+            return sql, params, "number"
         else:
             return "SELECT COUNT(*) as total_cases FROM fir_cases", [], "number"
 
@@ -563,7 +662,23 @@ def build_sql_query(intent: str, query: str, db_conn) -> Tuple[str, list, str]:
         return sql, [], "bar"
 
     elif intent == "crime_by_type":
-        if district:
+        # If a specific crime type is resolved (fresh or carried over from
+        # context), filter down to just that type instead of always showing
+        # the full breakdown -- e.g. a follow-up "what about theft?" should
+        # answer about Theft specifically, optionally still scoped to a
+        # carried-over district.
+        if crime_type:
+            sql = """SELECT COUNT(*) as total_cases
+                     FROM fir_cases f
+                     JOIN police_stations ps ON f.station_id = ps.station_id
+                     JOIN districts d ON ps.district_id = d.district_id
+                     WHERE f.crime_type = ?"""
+            params = [crime_type]
+            if district:
+                sql += " AND LOWER(d.district_name) LIKE ?"
+                params.append(f"%{district.lower()}%")
+            return sql, params, "number"
+        elif district:
             sql = """SELECT f.crime_type, COUNT(*) as case_count
                      FROM fir_cases f
                      JOIN police_stations ps ON f.station_id = ps.station_id
@@ -750,15 +865,21 @@ def _build_markdown_table(rows: list, columns: list, title: str, intro: str = ""
     return "\n".join(lines)
 
 
-def generate_natural_response(query: str, intents: list, results: list, chart_type: str) -> str:
+def generate_natural_response(query: str, intents: list, results: list, chart_type: str, resolved: Optional[dict] = None) -> str:
     """
     Generate a human-readable response from query results.
     Builds the deterministic, explainable (SQL-backed) response first, then
     layers an optional AI-generated insight from Catalyst QuickML's
     GLM-4.7-Flash LLM on top -- giving investigators both the auditable data
     table AND a natural-language analytical summary.
+
+    `resolved` (optional) is the dict returned by build_sql_query() --
+    {"district", "year", "crime_type", "context_used"} -- describing which
+    entities (if any) were carried over from earlier in the conversation.
+    When present, a short "remembered from earlier" note is prepended so the
+    user can see exactly what context was applied (explainable AI).
     """
-    base_response = _generate_deterministic_response(query, intents, results, chart_type)
+    base_response = _generate_deterministic_response(query, intents, results, chart_type, resolved)
 
     intent = intents[0] if intents else "general"
     if intent == "greeting" or not results or "error" in results[0]:
@@ -772,8 +893,27 @@ def generate_natural_response(query: str, intents: list, results: list, chart_ty
     return base_response
 
 
-def _generate_deterministic_response(query: str, intents: list, results: list, chart_type: str) -> str:
-    """Rule-based, explainable response builder (original implementation)."""
+def _context_note(context_used: dict, district: Optional[str], year: Optional[int], crime_type: Optional[str]) -> str:
+    """Build a short, transparent note about which entities were carried
+    over from earlier in the conversation (explainable AI)."""
+    if not context_used:
+        return ""
+    parts = []
+    if context_used.get("district") and district:
+        parts.append(f"district **{district.title()}**")
+    if context_used.get("crime_type") and crime_type:
+        parts.append(f"crime type **{crime_type}**")
+    if context_used.get("year") and year:
+        parts.append(f"year **{year}**")
+    if not parts:
+        return ""
+    return f"🧭 _Continuing from earlier in this chat — using {', '.join(parts)}._\n\n"
+
+
+def _generate_deterministic_response(query: str, intents: list, results: list, chart_type: str, resolved: Optional[dict] = None) -> str:
+    """Rule-based, explainable response builder. Wraps the core builder so a
+    single 'continuing from earlier in this chat' note (when applicable) is
+    prepended to whichever branch produced the final response."""
     if intents and intents[0] == "greeting":
         return "Hello! 👋 I’m KSP Crime Intelligence AI. I can help you explore crime trends, district-wise patterns, suspect details, hotspots, and case status. What would you like to know today?"
 
@@ -783,20 +923,37 @@ def _generate_deterministic_response(query: str, intents: list, results: list, c
     if "error" in results[0]:
         return f"There was an error processing your query: {results[0]['error']}"
 
-    district = extract_district(query)
-    year = extract_year(query)
-    crime_type = extract_crime_type(query)
+    # Fall back to re-extracting from the raw query text if no resolved
+    # entities were passed in (keeps this function usable standalone / by tests).
+    if resolved:
+        context_used = resolved.get("context_used", {})
+        district = resolved.get("district")
+        year = resolved.get("year")
+        crime_type = resolved.get("crime_type")
+    else:
+        context_used = {}
+        district = extract_district(query)
+        year = extract_year(query)
+        crime_type = extract_crime_type(query)
+
+    note = _context_note(context_used, district, year, crime_type)
+    body = _build_deterministic_body(query, intents, results, chart_type, district, year, crime_type)
+    return f"{note}{body}"
+
+
+def _build_deterministic_body(query: str, intents: list, results: list, chart_type: str, district: Optional[str], year: Optional[int], crime_type: Optional[str]) -> str:
     intent = intents[0] if intents else "general"
 
     if chart_type == "number":
         count = list(results[0].values())[0]
-        context = ""
+        parts = []
+        if crime_type:
+            parts.append(f"of **{crime_type}**")
         if district:
-            context = f" in **{district.title()}**"
-        elif crime_type:
-            context = f" for **{crime_type}**"
-        elif year:
-            context = f" in **{year}**"
+            parts.append(f"in **{district.title()}**")
+        if year:
+            parts.append(f"in **{year}**")
+        context = f" {' '.join(parts)}" if parts else ""
         return f"📊 There are **{count:,}** total cases{context} in the KSP database."
 
     if intent == "crime_by_district":

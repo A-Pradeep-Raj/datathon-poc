@@ -263,7 +263,9 @@ async function sendMessage() {
         intents: data.intents,
         sql: data.sql,
         count: data.total_records,
-        ts: ts
+        ts: ts,
+        contextUsed: data.context_used,
+        resolvedEntities: data.resolved_entities
       });
 
       // Update suggestions
@@ -343,6 +345,16 @@ function clearChat() {
   conversation = [];
   // Hide chart panel
   document.getElementById("chartPanel").classList.add("hidden");
+
+  // Tell the backend to forget this session's conversation context, then
+  // start a brand new session so no district/year/crime_type carries over
+  // into the new chat.
+  fetch(`${API_BASE}/api/reset-context`, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ session_id: sessionId })
+  }).catch(() => {});
+  sessionId = "session_" + Date.now();
 }
 
 async function fetchSuggestions(lastIntent) {
@@ -386,10 +398,30 @@ function renderResponseChart(data) {
   tableContainer.style.display = "none";
 
   const items = data.data.slice(0, 20);
-  const firstKey = Object.keys(items[0] || {})[0];
-  const secondKey = Object.keys(items[0] || {})[1];
 
-  const labels = items.map(r => String(r[firstKey] || "N/A").substring(0, 20));
+  // choose x (category) and y (numeric) keys heuristically so charts are meaningful
+  function pickXYKeys(sample) {
+    const keys = Object.keys(sample || {});
+    const xCandidates = ["label", "station_name", "district_name", "crime_type", "name", "month", "year"];
+    const yCandidates = ["value", "case_count", "count", "cases", "items_stolen", "total_value", "avg_severity", "severity_score", "severity", "percentage"];
+
+    let xKey = keys.find(k => xCandidates.includes(k)) || null;
+    let yKey = keys.find(k => yCandidates.includes(k)) || null;
+
+    if (!xKey) {
+      // prefer the first string column
+      xKey = keys.find(k => typeof sample[k] === 'string') || keys[0] || 'label';
+    }
+    if (!yKey) {
+      // prefer the first numeric column
+      yKey = keys.find(k => typeof sample[k] === 'number') || keys.find(k => !isNaN(Number(sample[k]))) || keys[1] || keys[0];
+    }
+    return [xKey, yKey];
+  }
+
+  const [firstKey, secondKey] = pickXYKeys(items[0] || {});
+
+  const labels = items.map(r => String(r[firstKey] ?? "N/A"));
   const values = items.map(r => Number(r[secondKey]) || 0);
 
   let chartType = data.chart_type === "line" ? "line"
@@ -397,22 +429,60 @@ function renderResponseChart(data) {
     : data.chart_type === "doughnut" ? "doughnut"
     : "bar";
 
-  chartTitle.textContent = "📊 " + (data.intents?.[0] || "Results").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  // Prefer explicit chart title when provided, else derive from intent
+  chartTitle.textContent = "📊 " + (data.title || (data.intents?.[0] || "Results")).replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+  // helper: wrap long labels into multiple lines for readability
+  function wrapLabel(label, maxLen = 12) {
+    if (!label) return "";
+    const words = String(label).split(/\s+/);
+    let line = "", out = [];
+    words.forEach(w => {
+      if ((line + " " + w).trim().length > maxLen) {
+        if (line) out.push(line.trim());
+        line = w;
+      } else {
+        line = (line + " " + w).trim();
+      }
+    });
+    if (line) out.push(line.trim());
+    return out.join("\n");
+  }
+
+  // apply wrapping to labels shown on chart
+  const chartLabels = labels.map(l => wrapLabel(l, 14));
+
+  // determine a friendly y-axis title
+  let yAxisTitle = secondKey ? String(secondKey).replace(/_/g, ' ').toUpperCase() : 'Value';
+  const sk = (secondKey || '').toLowerCase();
+  if (sk.includes('case') || sk.includes('count') || sk.includes('cases')) yAxisTitle = 'Cases';
+  else if (sk.includes('severity')) yAxisTitle = 'Avg Severity (0-10)';
+
+  // detect severity field to color-code bars
+  const severityKey = items[0] && (items[0].avg_severity !== undefined ? 'avg_severity' : (items[0].severity !== undefined ? 'severity' : null));
+  const severityArr = severityKey ? items.map(r => Number(r[severityKey]) || 0) : null;
+
+  function severityColor(v) {
+    const x = Math.max(0, Math.min(10, Number(v) || 0)) / 10; // 0..1
+    const r = Math.round(240 * x + 15 * (1 - x));
+    const g = Math.round(200 * (1 - x) + 80 * x);
+    return `rgba(${r}, ${g}, 50, 0.95)`;
+  }
 
   currentChartInstance = new Chart(ctx, {
     type: chartType,
     data: {
-      labels,
+      labels: chartLabels,
       datasets: [{
-        label: secondKey,
+        label: (secondKey || "Value").replace(/_/g, ' ').toUpperCase(),
         data: values,
         backgroundColor: chartType === "pie" || chartType === "doughnut"
           ? CHART_COLORS
-          : CHART_COLORS[0],
+          : (severityArr ? severityArr.map(severityColor) : CHART_COLORS[0]),
         borderColor: chartType === "line" ? CHART_COLORS[0] : undefined,
         borderWidth: chartType === "line" ? 2 : 1,
         fill: chartType === "line" ? false : undefined,
-        tension: 0.4,
+        tension: 0.3,
         pointRadius: chartType === "line" ? 4 : undefined,
       }]
     },
@@ -424,16 +494,31 @@ function renderResponseChart(data) {
           display: chartType !== "bar",
           labels: { color: "#e6edf3", font: { size: 11 } }
         },
-        tooltip: { mode: "index", intersect: false }
+        tooltip: {
+          mode: "index",
+          intersect: false,
+          callbacks: {
+            label: function(context) {
+              const v = context.parsed.y ?? context.parsed ?? 0;
+              const parts = [`${context.dataset.label || "Value"}: ${Number(v).toLocaleString()}`];
+              if (severityArr && context.dataIndex !== undefined) {
+                parts.push(`Avg Severity: ${severityArr[context.dataIndex].toFixed(2)}`);
+              }
+              return parts.join(' — ');
+            }
+          }
+        }
       },
       scales: chartType === "bar" || chartType === "line" ? {
         x: {
-          ticks: { color: "#8b949e", maxRotation: 45, font: { size: 10 } },
-          grid: { color: "#21262d" }
+          ticks: { color: "#8b949e", font: { size: 10 }, maxRotation: 60, autoSkip: true },
+          grid: { color: "#21262d" },
+          title: { display: true, text: firstKey ? String(firstKey).replace(/_/g, ' ').toUpperCase() : 'Category', color: '#8b949e', font: { size: 11 } }
         },
         y: {
-          ticks: { color: "#8b949e", font: { size: 10 } },
-          grid: { color: "#21262d" }
+          ticks: { color: "#8b949e", font: { size: 10 }, callback: v => Number(v).toLocaleString() },
+          grid: { color: "#21262d" },
+          title: { display: true, text: yAxisTitle, color: '#8b949e', font: { size: 11 } }
         }
       } : {}
     }
@@ -500,23 +585,59 @@ async function loadDashChart(canvasId, chartId, defaultType) {
 
     if (dbCharts[canvasId]) { dbCharts[canvasId].destroy(); }
 
-    const labels = d.data.map(r => String(r.label || "").substring(0, 18));
-    const values = d.data.map(r => Number(r.value) || 0);
+    // wrap long labels for readability
+    function _wrapLabel(label, maxLen = 14) {
+      if (!label) return "";
+      const words = String(label).split(/\s+/);
+      let line = "", out = [];
+      words.forEach(w => {
+        if ((line + " " + w).trim().length > maxLen) {
+          if (line) out.push(line.trim());
+          line = w;
+        } else {
+          line = (line + " " + w).trim();
+        }
+      });
+      if (line) out.push(line.trim());
+      return out.join("\n");
+    }
+
     const type = d.type === "line" ? "line"
       : d.type === "pie" ? "pie"
       : d.type === "doughnut" ? "doughnut"
       : "bar";
+
+    // labels / values
+    const labels = d.data.map(r => _wrapLabel(String(r.label || ""), 14));
+    const values = d.data.map(r => Number(r.value) || 0);
+
+    // detect optional severity column to color-code bars
+    const severityField = d.data[0] && (d.data[0].severity !== undefined ? 'severity' : (d.data[0].avg_severity !== undefined ? 'avg_severity' : null));
+    const severityValues = severityField ? d.data.map(r => Number(r[severityField]) || 0) : null;
+
+    // decide y-axis title based on title or presence of severity
+    let yAxisTitle = 'Count';
+    if (severityField) yAxisTitle = 'Avg Severity (0-10)';
+    else if (String(d.title || '').toLowerCase().includes('value')) yAxisTitle = 'Value (₹)';
+    else if (String(d.title || '').toLowerCase().includes('cases') || String(d.title || '').toLowerCase().includes('count')) yAxisTitle = 'Cases';
+
+    function sevColor(v) {
+      const x = Math.max(0, Math.min(10, Number(v) || 0)) / 10;
+      const r = Math.round(240 * x + 15 * (1 - x));
+      const g = Math.round(200 * (1 - x) + 80 * x);
+      return `rgba(${r}, ${g}, 50, 0.95)`;
+    }
 
     dbCharts[canvasId] = new Chart(ctx, {
       type,
       data: {
         labels,
         datasets: [{
-          label: d.title,
+          label: d.title || '',
           data: values,
-          backgroundColor: type === "pie" || type === "doughnut"
+          backgroundColor: (type === "pie" || type === "doughnut")
             ? CHART_COLORS
-            : type === "line" ? "rgba(26,115,232,0.2)" : CHART_COLORS[0],
+            : (severityValues ? severityValues.map(sevColor) : CHART_COLORS[0]),
           borderColor: type === "line" ? CHART_COLORS[0] : "transparent",
           borderWidth: type === "line" ? 2 : 0,
           fill: type === "line",
@@ -532,11 +653,16 @@ async function loadDashChart(canvasId, chartId, defaultType) {
             display: type !== "bar",
             labels: { color: "#8b949e", font: { size: 10 }, boxWidth: 12 }
           },
-          title: { display: false }
+          title: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) { return `${ctx.dataset.label || 'Value'}: ${Number(ctx.parsed.y ?? ctx.parsed ?? 0).toLocaleString()}`; }
+            }
+          }
         },
         scales: type === "bar" || type === "line" ? {
-          x: { ticks: { color: "#8b949e", font: { size: 10 }, maxRotation: 45 }, grid: { color: "#21262d" } },
-          y: { ticks: { color: "#8b949e", font: { size: 10 } }, grid: { color: "#21262d" } }
+          x: { ticks: { color: "#8b949e", font: { size: 10 }, maxRotation: 60, autoSkip: true }, grid: { color: "#21262d" }, title: { display: true, text: d.title || '', color: '#8b949e', font: { size: 11 } } },
+          y: { ticks: { color: "#8b949e", font: { size: 10 }, callback: v => Number(v).toLocaleString() }, grid: { color: "#21262d" }, title: { display: true, text: yAxisTitle, color: '#8b949e', font: { size: 11 } } }
         } : {}
       }
     });
@@ -545,9 +671,6 @@ async function loadDashChart(canvasId, chartId, defaultType) {
 
 // ── ANALYTICS ─────────────────────────────────────────────────────────────
 async function loadAnalytics() {
-  await loadDashChart("ana-monthly", "monthly_trend", "line");
-  await loadDashChart("ana-hotspot", "top_hotspots", "bar");
-  await loadDashChart("ana-property", "property_recovery", "bar");
   await loadDashChart("ana-gender", "gender_accused", "pie");
   loadPredictive();
 }
@@ -759,8 +882,18 @@ function addAuditEntry(entry) {
     </div>
     <div class="audit-sql">${escapeHtml(entry.sql || "")}</div>
     <div class="audit-result-count">✅ ${entry.count} record(s) returned</div>
+    ${_renderContextBadge(entry.contextUsed, entry.resolvedEntities)}
   `;
   container.insertBefore(div, container.firstChild);
+}
+
+function _renderContextBadge(contextUsed, resolvedEntities) {
+  if (!contextUsed || Object.keys(contextUsed).length === 0) return "";
+  const carried = Object.keys(contextUsed)
+    .filter(k => contextUsed[k])
+    .map(k => `${k.replace("_", " ")}: ${escapeHtml(String((resolvedEntities || {})[k] ?? ""))}`);
+  if (!carried.length) return "";
+  return `<div class="audit-context-used" title="Entity remembered from earlier in this conversation">🧭 Context carried over — ${carried.join(", ")}</div>`;
 }
 
 // ── PDF EXPORT ────────────────────────────────────────────────────────────

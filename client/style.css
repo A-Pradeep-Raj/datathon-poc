@@ -283,6 +283,26 @@ html, body {
 .msg-bubble strong { color: var(--accent); }
 .msg-bubble p { margin: 4px 0; }
 .msg-bubble ul { padding-left: 16px; }
+.msg-bubble table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 12px;
+}
+.msg-bubble th,
+.msg-bubble td {
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+.msg-bubble th {
+  background: rgba(26, 115, 232, 0.12);
+  color: var(--accent);
+}
+.msg-bubble tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
 
 .msg-meta { font-size: 10px; color: var(--text-muted); margin-top: 4px; text-align: right; }
 
@@ -640,6 +660,16 @@ html, body {
   margin-top: 6px;
 }
 .audit-result-count { font-size: 11px; color: var(--success); margin-top: 6px; }
+.audit-context-used {
+  font-size: 11px;
+  color: #d29922;
+  background: rgba(210,153,34,0.12);
+  border: 1px solid rgba(210,153,34,0.3);
+  border-radius: 6px;
+  padding: 4px 8px;
+  margin-top: 6px;
+  display: inline-block;
+}
 
 /* ── TABLE ───────────────────────────────────────────────────────────────── */
 .table-container {

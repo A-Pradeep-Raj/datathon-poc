@@ -263,7 +263,9 @@ async function sendMessage() {
         intents: data.intents,
         sql: data.sql,
         count: data.total_records,
-        ts: ts
+        ts: ts,
+        contextUsed: data.context_used,
+        resolvedEntities: data.resolved_entities
       });
 
       // Update suggestions
@@ -343,6 +345,16 @@ function clearChat() {
   conversation = [];
   // Hide chart panel
   document.getElementById("chartPanel").classList.add("hidden");
+
+  // Tell the backend to forget this session's conversation context, then
+  // start a brand new session so no district/year/crime_type carries over
+  // into the new chat.
+  fetch(`${API_BASE}/api/reset-context`, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ session_id: sessionId })
+  }).catch(() => {});
+  sessionId = "session_" + Date.now();
 }
 
 async function fetchSuggestions(lastIntent) {
@@ -870,8 +882,18 @@ function addAuditEntry(entry) {
     </div>
     <div class="audit-sql">${escapeHtml(entry.sql || "")}</div>
     <div class="audit-result-count">✅ ${entry.count} record(s) returned</div>
+    ${_renderContextBadge(entry.contextUsed, entry.resolvedEntities)}
   `;
   container.insertBefore(div, container.firstChild);
+}
+
+function _renderContextBadge(contextUsed, resolvedEntities) {
+  if (!contextUsed || Object.keys(contextUsed).length === 0) return "";
+  const carried = Object.keys(contextUsed)
+    .filter(k => contextUsed[k])
+    .map(k => `${k.replace("_", " ")}: ${escapeHtml(String((resolvedEntities || {})[k] ?? ""))}`);
+  if (!carried.length) return "";
+  return `<div class="audit-context-used" title="Entity remembered from earlier in this conversation">🧭 Context carried over — ${carried.join(", ")}</div>`;
 }
 
 // ── PDF EXPORT ────────────────────────────────────────────────────────────
