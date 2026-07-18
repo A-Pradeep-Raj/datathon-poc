@@ -58,6 +58,9 @@
         <button class="nav-btn" onclick="showTab('network')" title="Network">
           🕸️ <span>Network</span>
         </button>
+        <button class="nav-btn" onclick="showTab('documents')" title="Documents">
+          📚 <span>Documents</span>
+        </button>
         <button class="nav-btn" onclick="showTab('audit')" title="Audit Trail">
           📋 <span>Audit Trail</span>
         </button>
@@ -306,7 +309,26 @@
           Click a node to see criminal details
         </div>
       </section>
-
+      <!-- ── TAB: DOCUMENTS (RAG) ─────────────────────────────── -->
+      <section id="tab-documents" class="tab-pane">
+        <div class="documents-header">
+          <h2>📚 Document Intelligence (RAG)</h2>
+          <p class="subtitle">Ask questions about SOPs, policy manuals, and investigation guidelines using Catalyst QuickML RAG</p>
+        </div>
+        <div class="rag-panel">
+          <div class="rag-input-row">
+            <input type="text" id="ragInput" placeholder="e.g. What is the case clearance rate target?" onkeypress="if(event.key==='Enter') askRagQuestion()" />
+            <button class="send-btn" onclick="askRagQuestion()">Ask ➤</button>
+          </div>
+          <div class="rag-examples" id="ragExamples">
+            <span class="rag-example-chip" onclick="askRagQuestion('What is the FIR registration timeline?')">FIR registration timeline?</span>
+            <span class="rag-example-chip" onclick="askRagQuestion('What are the severity scoring guidelines?')">Severity scoring guidelines?</span>
+            <span class="rag-example-chip" onclick="askRagQuestion('How are crime hotspots identified?')">Hotspot identification criteria?</span>
+            <span class="rag-example-chip" onclick="askRagQuestion('What is the case clearance rate target?')">Case clearance rate target?</span>
+          </div>
+          <div id="ragResults" class="rag-results"></div>
+        </div>
+      </section>
       <!-- ── TAB: AUDIT ─────────────────────────────────────────────────── -->
       <section id="tab-audit" class="tab-pane">
         <div class="audit-header">

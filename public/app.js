@@ -77,6 +77,64 @@ function showTab(tabId) {
   if (tabId === "network") loadNetwork();
 }
 
+// ── DOCUMENT INTELLIGENCE (RAG) ──────────────────────────────────────────
+async function askRagQuestion(presetQuestion) {
+  const input = document.getElementById("ragInput");
+  const question = (presetQuestion || input.value || "").trim();
+  if (!question) return;
+
+  input.value = question;
+  const resultsEl = document.getElementById("ragResults");
+
+  const qId = `rag-q-${Date.now()}`;
+  resultsEl.insertAdjacentHTML("afterbegin", `
+    <div class="rag-entry" id="${qId}">
+      <div class="rag-question">🧑‍💼 ${question}</div>
+      <div class="rag-answer rag-loading">🔎 Searching knowledge base…</div>
+    </div>
+  `);
+
+  try {
+    const res = await fetch(`${API_BASE}/api/rag-query`, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ query: question })
+    });
+    const data = await res.json();
+    const entry = document.getElementById(qId);
+
+    if (data.success && data.answer) {
+      const sourcesHtml = (data.sources || []).map(s => `
+        <div class="rag-source">
+          <span class="rag-source-title">📄 ${s.title}</span>
+          <div class="rag-source-snippet">${s.snippet}</div>
+        </div>
+      `).join("");
+
+      entry.innerHTML = `
+        <div class="rag-question">🧑‍💼 ${question}</div>
+        <div class="rag-answer">🧠 ${data.answer}</div>
+        ${sourcesHtml ? `<div class="rag-sources"><div class="rag-sources-title">Sources:</div>${sourcesHtml}</div>` : ""}
+      `;
+    } else {
+      entry.innerHTML = `
+        <div class="rag-question">🧑‍💼 ${question}</div>
+        <div class="rag-answer rag-error">❌ ${data.error || "Could not find an answer in the knowledge base."}</div>
+      `;
+    }
+  } catch (e) {
+    const entry = document.getElementById(qId);
+    if (entry) {
+      entry.innerHTML = `
+        <div class="rag-question">🧑‍💼 ${question}</div>
+        <div class="rag-answer rag-error">❌ Error: ${e.message}</div>
+      `;
+    }
+  }
+
+  input.value = "";
+}
+
 // ── LANG ──────────────────────────────────────────────────────────────────
 function setLang(lang) {
   currentLang = lang;

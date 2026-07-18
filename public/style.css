@@ -531,6 +531,72 @@ html, body {
   color: var(--text-secondary);
 }
 
+/* ── DOCUMENT INTELLIGENCE (RAG) ────────────────────────────────────────── */
+.documents-header { margin-bottom: 16px; }
+.documents-header h2 { margin-bottom: 4px; }
+
+.rag-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rag-input-row {
+  display: flex;
+  gap: 10px;
+}
+.rag-input-row input {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+.rag-input-row input:focus { outline: none; border-color: var(--primary); }
+
+.rag-examples { display: flex; gap: 8px; flex-wrap: wrap; }
+.rag-example-chip {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.rag-example-chip:hover { background: rgba(26,115,232,0.15); color: var(--primary); border-color: var(--primary); }
+
+.rag-results { display: flex; flex-direction: column; gap: 14px; }
+
+.rag-entry {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.rag-question { font-weight: 600; color: var(--text-primary); font-size: 13px; margin-bottom: 8px; }
+.rag-answer { font-size: 13px; color: var(--text-primary); line-height: 1.5; }
+.rag-answer.rag-loading { color: var(--text-secondary); font-style: italic; }
+.rag-answer.rag-error { color: var(--danger); }
+
+.rag-sources { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
+.rag-sources-title { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.rag-source { margin-bottom: 8px; }
+.rag-source-title { font-size: 12px; font-weight: 600; color: var(--primary); }
+.rag-source-snippet {
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-main);
+  border-left: 3px solid var(--primary);
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
 /* ── AUDIT LOG ───────────────────────────────────────────────────────────── */
 .audit-header { margin-bottom: 20px; }
 .audit-header h2 { font-size: 18px; margin-bottom: 4px; }

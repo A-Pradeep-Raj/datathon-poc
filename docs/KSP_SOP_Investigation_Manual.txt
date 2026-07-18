@@ -1,0 +1,140 @@
+KARNATAKA STATE POLICE
+STANDARD OPERATING PROCEDURES (SOP) MANUAL
+Crime Investigation & Case Handling Guidelines
+Issued by: State Crime Records Bureau (SCRB)
+Version: 2026.1
+
+===============================================================
+SECTION 1: FIR REGISTRATION PROCEDURE
+===============================================================
+
+1.1 Filing a First Information Report (FIR)
+- Every complaint disclosing a cognizable offence must be registered as an
+  FIR under Section 154 of the CrPC without delay.
+- The Station House Officer (SHO) is responsible for ensuring the FIR is
+  registered within 24 hours of receiving the complaint.
+- A copy of the FIR must be provided to the complainant free of cost.
+- Zero FIR: If the offence occurred outside the jurisdiction of the police
+  station, a Zero FIR must be registered and later transferred to the
+  appropriate jurisdiction.
+
+1.2 Classification of Offences
+- Cognizable offences (murder, robbery, rape, kidnapping) require immediate
+  FIR registration and investigation without magistrate approval.
+- Non-cognizable offences (minor assault, defamation) require magistrate
+  permission before investigation can begin.
+
+1.3 Severity Scoring Guidelines
+- Severity scores (0-10) are assigned based on: nature of offence, use of
+  weapons, extent of injury/loss, vulnerability of victim, and repeat
+  offender status.
+- Scores 8-10: Heinous crimes (murder, rape, terrorism) - Highest priority.
+- Scores 5-7: Serious crimes (robbery, kidnapping, grievous hurt) - High
+  priority, senior officer supervision required.
+- Scores 1-4: Property crimes, minor offences - Standard investigation
+  timelines apply.
+
+===============================================================
+SECTION 2: INVESTIGATION TIMELINES
+===============================================================
+
+2.1 Standard Timelines
+- Simple cases: Investigation to be completed within 60 days.
+- Cases involving offences punishable with death/life imprisonment:
+  Investigation to be completed within 90 days (as per CrPC 167).
+- Cybercrime cases: Preliminary digital evidence collection within 48 hours
+  to prevent data loss.
+- Cases against women and children (POCSO): Investigation must be
+  completed within 2 months of recording the FIR.
+
+2.2 Case Status Categories
+- Pending Investigation: Active case under investigation.
+- Under Trial: Chargesheet filed, case before court.
+- Convicted: Court has delivered a guilty verdict.
+- Acquitted: Court has delivered a not-guilty verdict.
+- Closed (Untraced): Investigation concluded without identifying accused.
+
+===============================================================
+SECTION 3: ARREST AND CUSTODY PROCEDURES
+===============================================================
+
+3.1 Arrest Guidelines
+- Arrest memo must be prepared for every arrest, countersigned by a family
+  member or respectable person of the locality.
+- Arrested person must be informed of the grounds of arrest immediately.
+- Medical examination is mandatory at the time of arrest and release.
+- Arrested person must be produced before the magistrate within 24 hours,
+  excluding travel time.
+
+3.2 Wanted / Absconding Accused
+- If an accused evades arrest despite due process, they are classified as
+  "Wanted" or "Absconding" in the case records.
+- Proclaimed offender status may be sought from the court under CrPC 82
+  after repeated failure to appear.
+- Look Out Circulars (LOC) should be issued for accused likely to flee the
+  jurisdiction or country.
+
+===============================================================
+SECTION 4: CRIME HOTSPOT & PATROLLING GUIDELINES
+===============================================================
+
+4.1 Hotspot Identification
+- Stations with case counts exceeding the district average by 20% or more
+  should be flagged as hotspots for resource reallocation.
+- Average severity score above 6.0 combined with high case volume warrants
+  additional patrol deployment and CCTV surveillance installation.
+
+4.2 Preventive Patrolling
+- High-severity hotspots require night patrol frequency of at least once
+  every 2 hours.
+- Community policing initiatives should be prioritized in districts with
+  recurring domestic violence or kidnapping patterns.
+
+===============================================================
+SECTION 5: PROPERTY & EVIDENCE MANAGEMENT
+===============================================================
+
+5.1 Stolen Property Recovery
+- All recovered property must be logged with photographs, description, and
+  estimated value within 24 hours of recovery.
+- Property recovery rate is a key performance indicator (KPI) for station
+  performance evaluation.
+
+5.2 Chain of Custody
+- Physical evidence must maintain an unbroken chain of custody from
+  collection to court presentation.
+- Digital evidence (CCTV, mobile data) must be hashed and stored in
+  write-once media to prevent tampering allegations.
+
+===============================================================
+SECTION 6: CRIMINAL NETWORK & GANG MONITORING
+===============================================================
+
+6.1 Gang Classification
+- Repeat offenders with 3 or more FIRs and known associations are flagged
+  for criminal network analysis.
+- Co-accused appearing together in 2 or more FIRs are considered part of
+  the same network cluster for intelligence purposes.
+
+6.2 Habitual Offender Monitoring
+- Habitual offenders (History Sheeters) must be periodically verified by
+  the local police station as per the History Sheet maintenance guidelines.
+- Districts with rising gang-related cybercrime or vehicle theft trends
+  should coordinate with the Cyber Crime Cell and CID for joint operations.
+
+===============================================================
+SECTION 7: CASE CLEARANCE RATE (CCR) TARGETS
+===============================================================
+
+7.1 Definition
+- Case Clearance Rate = (Cases Chargesheeted + Cases Closed) / Total Cases
+  Registered, expressed as a percentage.
+
+7.2 Targets
+- District target CCR: 60% or above annually.
+- Districts falling below 40% CCR require a review by the Superintendent
+  of Police (SP) and a corrective action plan.
+
+===============================================================
+END OF DOCUMENT
+===============================================================

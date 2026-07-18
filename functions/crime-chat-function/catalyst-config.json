@@ -8,9 +8,11 @@
     "env_variables": {
       "QUICKML_CLIENT_ID": "1000.DS8CI9LN972XKEV3VJX7S7Y8U29CTE",
       "QUICKML_CLIENT_SECRET": "4cd6187daa7b7c3eee499fc1cc15d6b4b464f33c1e",
-      "QUICKML_REFRESH_TOKEN": "1000.8a75907117bcb2eb48f01086e9e70c0d.b07a2b03853e05d9cc10209c2e764f3c",
+      "QUICKML_REFRESH_TOKEN": "1000.2a68b9eb7e9ee7a5526a66021903490c.c54374fc642761f989501bc61a82051a",
       "QUICKML_ACCOUNTS_URL": "https://accounts.zoho.in",
       "QUICKML_GLM_ENDPOINT": "https://api.catalyst.zoho.in/quickml/v1/project/51742000000028001/glm/chat",
+      "QUICKML_RAG_ENDPOINT": "https://console.catalyst.zoho.in/quickml/v1/project/51742000000028001/rag/answer",
+      "QUICKML_KB_DOC_IDS": "6447000000002020",
       "QUICKML_ORG_ID": "60078097690"
     }
   },

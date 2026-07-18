@@ -21,7 +21,7 @@ if sys.stderr.encoding != "utf-8":
 from synthetic_data import create_database
 from ai_engine import (
     translate_kannada_to_english, detect_intent, detect_greeting, build_sql_query,
-    execute_query, generate_natural_response, get_dashboard_stats
+    execute_query, generate_natural_response, get_dashboard_stats, query_rag
 )
 
 app = Flask(__name__)
@@ -157,6 +157,40 @@ def chat():
             "data": results[:100],  # limit payload
             "total_records": len(results),
             "sql": sql,  # for explainability/audit trail
+            "timestamp": datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/rag-query", methods=["POST", "OPTIONS"])
+def rag_query():
+    """
+    Retrieval-Augmented Generation (RAG) endpoint for querying uploaded
+    policy/SOP documents in natural language via Catalyst QuickML's RAG
+    service. Returns a grounded answer plus source citations from the
+    Knowledge Base.
+    """
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+
+    try:
+        body = request.get_json(force=True)
+        question = (body.get("query") or "").strip()
+        document_ids = body.get("document_ids")  # optional override
+
+        if not question:
+            return jsonify({"success": False, "error": "Query is empty"}), 400
+
+        result = query_rag(question, document_ids)
+
+        return jsonify({
+            "success": result["success"],
+            "query": question,
+            "answer": result["answer"],
+            "sources": result["sources"],
+            "error": result["error"],
             "timestamp": datetime.now().isoformat()
         })
 

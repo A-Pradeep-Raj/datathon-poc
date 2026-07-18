@@ -33,6 +33,17 @@ _QUICKML_GLM_ENDPOINT = os.environ.get(
 _QUICKML_ORG_ID = os.environ.get("QUICKML_ORG_ID", "60078097690")
 _QUICKML_MODEL = "crm-di-glm47b_30b_it"
 
+# RAG (Retrieval-Augmented Generation) over the Knowledge Base -- lets
+# officers query uploaded SOP/policy documents in natural language and get
+# grounded answers with source citations.
+_QUICKML_RAG_ENDPOINT = os.environ.get(
+    "QUICKML_RAG_ENDPOINT",
+    "https://console.catalyst.zoho.in/quickml/v1/project/51742000000028001/rag/answer",
+)
+_QUICKML_KB_DOC_IDS = [
+    d.strip() for d in os.environ.get("QUICKML_KB_DOC_IDS", "").split(",") if d.strip()
+]
+
 _quickml_token_cache = {"access_token": None, "expires_at": 0}
 
 
@@ -160,6 +171,66 @@ def _clean_llm_output(text: str) -> str:
         text = re.sub(r"^\*+\s*Draft\s*\d*\**:?\s*", "", text, flags=re.IGNORECASE).strip()
         text = text.strip('"').strip()
     return text.strip()
+
+
+def query_rag(question: str, document_ids: Optional[List[str]] = None) -> dict:
+    """
+    Query Catalyst QuickML's RAG (Retrieval-Augmented Generation) service
+    over documents uploaded to the Knowledge Base (e.g. SOP manuals, policy
+    guidelines). Returns a dict with the grounded answer plus source
+    citations so officers can verify where the information came from.
+
+    Returns: {"success": bool, "answer": str, "sources": [ {title, snippet,
+    document_id}, ... ], "error": str|None}
+    """
+    token = _get_quickml_access_token()
+    if not token:
+        return {
+            "success": False,
+            "answer": None,
+            "sources": [],
+            "error": "QuickML RAG is not configured on this deployment.",
+        }
+
+    doc_ids = document_ids if document_ids else _QUICKML_KB_DOC_IDS
+
+    try:
+        resp = _requests.post(
+            _QUICKML_RAG_ENDPOINT,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Zoho-oauthtoken {token}",
+                "CATALYST-ORG": _QUICKML_ORG_ID,
+            },
+            json={"query": question, "documents": doc_ids} if doc_ids else {"query": question},
+            timeout=30,
+        )
+        data = resp.json()
+        if data.get("status") != "success":
+            return {
+                "success": False,
+                "answer": None,
+                "sources": [],
+                "error": data.get("message") or "RAG query failed.",
+            }
+
+        sources = []
+        for node in data.get("retrieved_nodes", [])[:5]:
+            content = (node.get("content") or "").strip()
+            sources.append({
+                "title": node.get("document_title") or "Untitled document",
+                "document_id": node.get("document_id"),
+                "snippet": (content[:280] + "…") if len(content) > 280 else content,
+            })
+
+        return {
+            "success": True,
+            "answer": (data.get("response") or "").strip(),
+            "sources": sources,
+            "error": None,
+        }
+    except Exception as e:
+        return {"success": False, "answer": None, "sources": [], "error": str(e)}
 
 
 # --- Kannada <-> English keyword map ---
