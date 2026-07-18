@@ -1,8 +1,8 @@
 {
-  "project_name": "ksp-crime-ai",
+  "project_name": "krime-ai",
   "project_directory": ".",
-  "project_id": "51742000000017001",
-  "project_key": "ksp-crime-ai",
+  "project_id": "51742000000028001",
+  "project_key": "krime-ai",
   "org_id": "60078097690",
   "functions": {
     "source": "functions",

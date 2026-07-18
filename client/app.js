@@ -42,7 +42,7 @@ async function ensureDbReady() {
   try {
     const res = await fetch(`${API_BASE}/api/health`);
     if (!res.ok) throw new Error("Backend not ready");
-    showToast("✅ KSP Crime AI connected");
+    showToast("✅ KRIME AI connected");
   } catch (e) {
     // Try to init DB
     showToast("⚙️ Initializing database…");
@@ -225,7 +225,7 @@ function clearChat() {
   document.getElementById("chatMessages").innerHTML = `
     <div class="welcome-card">
       <div class="welcome-icon">🚔</div>
-      <h2>KSP Crime Intelligence AI</h2>
+      <h2>KRIME AI</h2>
       <p>Ask me anything about Karnataka crime data in <strong>English</strong> or <strong>ಕನ್ನಡ</strong></p>
       <div class="example-queries" id="exampleQueries"></div>
     </div>`;
@@ -668,7 +668,7 @@ async function exportPDF() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         conversation,
-        title: "KSP Crime AI Investigation Report",
+        title: "KRIME AI Investigation Report",
         officer: "Investigating Officer",
         badge: "KA-" + Math.floor(Math.random() * 90000 + 10000)
       })
@@ -685,7 +685,7 @@ async function exportPDF() {
 
       doc.setFontSize(18);
       doc.setFont("helvetica", "bold");
-      doc.text("KSP Crime Intelligence AI", 15, 20);
+      doc.text("KRIME AI", 15, 20);
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(139, 148, 158);
