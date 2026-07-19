@@ -442,19 +442,6 @@ html, body {
   min-height: 16px;
 }
 
-.sql-badge {
-  margin-top: 8px;
-  padding: 6px 10px;
-  background: var(--bg-main);
-  border-left: 3px solid var(--primary);
-  font-size: 11px;
-  color: var(--text-muted);
-  border-radius: 0 4px 4px 0;
-  font-family: 'Courier New', monospace;
-  overflow-x: auto;
-  white-space: pre;
-}
-
 /* ── DASHBOARD ───────────────────────────────────────────────────────────── */
 .dashboard-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .dashboard-header h2 { font-size: 18px; }

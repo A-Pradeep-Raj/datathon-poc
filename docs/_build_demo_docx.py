@@ -197,7 +197,9 @@ add_body("Talking points:", bold=True)
 add_bullets([
     "Notice the chart panel auto-renders alongside the answer.",
     "The AI Insight line is LLM-generated commentary on the data — not hardcoded.",
-    "The SQL badge shows exactly what query ran — full explainability.",
+    "The chat stays clean and end-user friendly by design — the exact SQL executed for every "
+    "answer is still fully available (untruncated) in the Audit Trail tab for full "
+    "explainability, without cluttering the conversation.",
 ])
 add_body(
     'Context-awareness demo: Ask a follow-up like "What about theft?" without repeating '

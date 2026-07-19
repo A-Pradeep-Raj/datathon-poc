@@ -343,7 +343,7 @@ async function sendMessage() {
 
     if (data.success) {
       const ts = new Date().toLocaleTimeString();
-      addMessageBubble("assistant", data.response, ts, data.sql);
+      addMessageBubble("assistant", data.response, ts);
       conversation.push({ role: "assistant", content: data.response, timestamp: ts });
       speakText(data.response);
 
@@ -380,7 +380,7 @@ async function sendMessage() {
   document.getElementById("sendBtn").disabled = false;
 }
 
-function addMessageBubble(role, content, timestamp, sql) {
+function addMessageBubble(role, content, timestamp) {
   const container = document.getElementById("chatMessages");
 
   // Remove welcome card on first message
@@ -395,15 +395,13 @@ function addMessageBubble(role, content, timestamp, sql) {
     ? marked.parse(content)
     : escapeHtml(content);
 
-  let sqlBlock = "";
-  if (sql && role === "assistant") {
-    sqlBlock = `<div class="sql-badge" title="SQL Query executed">🔍 SQL: ${escapeHtml(sql.substring(0, 150))}${sql.length > 150 ? "…" : ""}</div>`;
-  }
-
+  // NOTE: the SQL query executed for this answer is intentionally NOT shown
+  // here to keep the chat clean for end users -- it's still fully visible
+  // (untruncated) in the Audit Trail tab for explainability/auditing.
   div.innerHTML = `
     <div class="msg-avatar">${avatar}</div>
     <div>
-      <div class="msg-bubble">${renderedContent}${sqlBlock}</div>
+      <div class="msg-bubble">${renderedContent}</div>
       <div class="msg-meta">${timestamp}</div>
     </div>`;
   container.appendChild(div);

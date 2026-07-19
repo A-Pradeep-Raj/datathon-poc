@@ -57,7 +57,7 @@ Type or click a suggestion, e.g. **"Show crimes by district"**. The AI:
 **Talking points:**
 - Notice the **📊 chart panel** auto-renders alongside the answer.
 - The **🧠 AI Insight** line is LLM-generated commentary on the data — not hardcoded.
-- The **🔍 SQL** badge shows exactly what query ran — full explainability.
+- The chat stays clean and end-user friendly by design — the **exact SQL executed** for every answer is still fully available (untruncated) in the **📋 Audit Trail** tab for full explainability, without cluttering the conversation.
 
 **Context-awareness demo:** Ask a follow-up like *"What about theft?"* without repeating the district — the AI remembers what you were just discussing and carries the context forward (visible later in the Audit Trail tab with a "🧭 Context carried over" badge).
 
