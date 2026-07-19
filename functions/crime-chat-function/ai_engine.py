@@ -364,6 +364,8 @@ INTENT_PATTERNS = {
         r"show.*(district|districts)",
         r"district.*(wise|breakdown|distribution|comparison)",
         r"top.*district",
+        r"how many districts?",
+        r"number of districts?",
     ],
     "crime_by_type": [
         r"(murder|theft|robbery|rape|cybercrime|drug|dacoity|kidnapping|arson|burglary)(\s+(cases?|crimes?|statistics))?",
@@ -467,7 +469,35 @@ def detect_intent(query: str) -> list:
             if re.search(pattern, query_lower):
                 detected.append(intent)
                 break
-    return detected if detected else ["general"]
+
+    if not detected:
+        return ["general"]
+
+    # "count_crimes" only recognizes the generic phrasing "how many
+    # crimes/cases" -- it says nothing about *which* cases. If a more
+    # specific topic intent (case_status, property_crime, severity,
+    # accused_search, victim_stats, hotspot, officer_stats) ALSO matched,
+    # that one carries the actual filter (e.g. "pending", "mobile phone",
+    # "wanted") and must win as intents[0] -- otherwise e.g. "how many
+    # cases are pending?" would be answered as "how many cases total" and
+    # silently drop the "pending" filter.
+    #
+    # "crime_by_district" is handled separately: it should only outrank
+    # count_crimes when the query has NO specific district name (e.g. "how
+    # many districts are there?") -- count_crimes already resolves a named
+    # district (e.g. "crimes in Mysuru?") correctly via extract_district(),
+    # so demoting it there would wrongly switch to counting districts.
+    if "count_crimes" in detected and len(detected) > 1:
+        demotable = {"case_status", "property_crime", "severity", "accused_search",
+                     "victim_stats", "hotspot", "officer_stats", "network_analysis"}
+        more_specific = [i for i in detected if i in demotable]
+        if "crime_by_district" in detected and extract_district(query) is None:
+            more_specific.append("crime_by_district")
+        if more_specific:
+            remaining = [i for i in detected if i not in more_specific and i != "count_crimes"]
+            detected = more_specific + remaining + ["count_crimes"]
+
+    return detected
 
 
 def detect_greeting(query: str) -> bool:
@@ -527,6 +557,77 @@ def extract_crime_type(query: str) -> Optional[str]:
         if keyword in query_lower:
             return crime
     return None
+
+
+def extract_case_status(query: str) -> Optional[str]:
+    """Map phrasing like 'pending', 'chargesheet', 'convicted' to the exact
+    status value stored in fir_cases.status, so status-specific questions
+    (e.g. 'how many cases are pending?') filter correctly instead of
+    silently returning a full breakdown or an unfiltered total."""
+    status_map = {
+        "pending investigation": "Pending Investigation",
+        "pending": "Pending Investigation",
+        "under investigation": "Under Investigation",
+        "chargesheet": "Chargesheet Filed",
+        "charge sheet": "Chargesheet Filed",
+        "trial": "Trial in Progress",
+        "convicted": "Convicted",
+        "conviction": "Convicted",
+        "acquitted": "Acquitted",
+        "case closed": "Case Closed",
+        "closed": "Case Closed",
+        "solved": "Case Closed",
+    }
+    query_lower = query.lower()
+    for keyword, status in status_map.items():
+        if keyword in query_lower:
+            return status
+    return None
+
+
+def extract_property_type(query: str) -> Optional[str]:
+    """Detect a specific stolen-property category mentioned in the query."""
+    property_map = {
+        "mobile phone": "Mobile Phone", "mobile": "Mobile Phone", "phone": "Mobile Phone",
+        "cash": "Cash", "jewellery": "Jewellery", "jewelry": "Jewellery",
+        "vehicle": "Vehicle", "electronics": "Electronics", "documents": "Documents",
+    }
+    query_lower = query.lower()
+    for keyword, ptype in property_map.items():
+        if keyword in query_lower:
+            return ptype
+    return None
+
+
+def _extract_victim_filter(query: str) -> Tuple[Optional[str], str]:
+    """Return (sql_where_fragment, human_subject) for victim-count queries
+    that mention a specific demographic (female/male/child)."""
+    query_lower = query.lower()
+    if "female" in query_lower:
+        return "v.gender = 'Female'", "female victims"
+    if "male" in query_lower:
+        return "v.gender = 'Male'", "male victims"
+    if "child" in query_lower or "minor" in query_lower:
+        return "v.age < 18", "minor/child victims (under 18)"
+    return None, "victims"
+
+
+def detect_response_shape(query: str) -> str:
+    """
+    Classify what SHAPE of answer the user expects, independent of the topic
+    `intent`. This is what lets "How many accused are wanted?" return a
+    single number while "List the wanted accused" returns a table, even
+    though both trigger the exact same `accused_search` intent -- without
+    this, every intent branch has to guess and often defaults to whichever
+    shape was hardcoded, producing answers that don't match the question.
+
+    Returns "count" for how-many/total/number-of style questions, else
+    "detail" (list/breakdown -- each intent already renders these as a
+    properly-columned markdown table or chart).
+    """
+    if re.search(r"how many|how much|total number|number of|count of|what'?s the (total|count)", query.lower()):
+        return "count"
+    return "detail"
 
 
 # --- Context-aware conversation helpers ---
@@ -612,6 +713,18 @@ def build_sql_query(intent: str, query: str, db_conn, session_context: Optional[
 
     sql, params, chart_type = _build_sql_query_core(intent, query, db_conn, district, year, crime_type)
 
+    # Guardrail: every intent branch above is expected to explicitly handle
+    # the "count" shape (see detect_response_shape) by returning a single
+    # COUNT(*) row with chart_type="number". If a branch is ever missed --
+    # or a new intent is added later without this check -- this safety net
+    # wraps whatever detail SQL was produced into a COUNT(*) subquery, so a
+    # "how many ...?" question can NEVER surface as a raw multi-row table.
+    # This keeps the answer's shape correct even when the specific wording
+    # wasn't anticipated by any individual branch.
+    if detect_response_shape(query) == "count" and chart_type != "number":
+        sql = f"SELECT COUNT(*) as total_matches FROM ({sql}) AS _shape_guard"
+        chart_type = "number"
+
     # Only surface "used earlier context" for entities this intent actually
     # consumes, so we don't tell the user we "remembered" something that had
     # no bearing on the answer.
@@ -623,7 +736,17 @@ def build_sql_query(intent: str, query: str, db_conn, session_context: Optional[
 
 
 def _build_sql_query_core(intent: str, query: str, db_conn, district: Optional[str], year: Optional[int], crime_type: Optional[str]) -> Tuple[str, list, str]:
-    """Returns (sql, params, chart_type) given already-resolved entities."""
+    """Returns (sql, params, chart_type) given already-resolved entities.
+
+    Every branch below first checks `shape` (count vs. detail) so that a
+    "how many ..." question always returns a single COUNT(*) row/"number"
+    chart_type, and a "show/list/breakdown ..." question always returns the
+    full detail table/chart -- regardless of which topic-level `intent` was
+    detected. This keeps every answer's SHAPE aligned with what was actually
+    asked, on top of the existing entity (district/year/crime_type) filtering.
+    """
+    shape = detect_response_shape(query)
+
     if intent == "count_crimes":
         # Combine ALL resolved entities (district AND/OR crime_type AND/OR
         # year) into a single filtered COUNT, instead of only honoring one
@@ -651,6 +774,12 @@ def _build_sql_query_core(intent: str, query: str, db_conn, district: Optional[s
             return "SELECT COUNT(*) as total_cases FROM fir_cases", [], "number"
 
     elif intent == "crime_by_district":
+        if shape == "count":
+            # "How many districts have registered crimes?" / "how many
+            # districts are there?" -- answer with a count of districts,
+            # not a full per-district breakdown chart.
+            sql = "SELECT COUNT(DISTINCT district_id) as total_districts FROM districts"
+            return sql, [], "number"
         sql = """SELECT d.district_name, COUNT(*) as case_count
                  FROM fir_cases f
                  JOIN police_stations ps ON f.station_id = ps.station_id
@@ -711,6 +840,18 @@ def _build_sql_query_core(intent: str, query: str, db_conn, district: Optional[s
             return sql, [], "line"
 
     elif intent == "hotspot":
+        if shape == "count":
+            # "How many hotspot stations are there?" -- count stations above
+            # a meaningful case-volume threshold rather than dumping the
+            # top-15 bar chart.
+            sql = """SELECT COUNT(*) as total_hotspots FROM (
+                        SELECT ps.station_id, COUNT(*) as case_count
+                        FROM fir_cases f
+                        JOIN police_stations ps ON f.station_id = ps.station_id
+                        GROUP BY ps.station_id
+                        HAVING case_count >= 20
+                     )"""
+            return sql, [], "number"
         sql = """SELECT ps.station_name, d.district_name, COUNT(*) as case_count,
                         AVG(f.severity_score) as avg_severity
                  FROM fir_cases f
@@ -720,7 +861,18 @@ def _build_sql_query_core(intent: str, query: str, db_conn, district: Optional[s
         return sql, [], "bar"
 
     elif intent == "accused_search":
-        if "repeat" in query.lower() or "history" in query.lower():
+        query_lower = query.lower()
+        # "How many / total / number of ..." should answer with a single
+        # count, not dump a full list/table -- e.g. "How many accused are
+        # still wanted?" should say "There are N wanted accused", not show
+        # a 30-row table flattened into 40+ field/value pairs.
+        is_count_query = bool(re.search(r"how many|how much|total number|number of|count of", query_lower))
+
+        if "repeat" in query_lower or "history" in query_lower:
+            if is_count_query:
+                sql = """SELECT COUNT(DISTINCT a.accused_id) as repeat_offender_count
+                         FROM accused a WHERE a.criminal_history > 0"""
+                return sql, [], "number"
             sql = """SELECT a.name, a.age, a.occupation, a.criminal_history, a.arrest_status,
                             COUNT(cr.record_id) as prior_cases
                      FROM accused a
@@ -728,13 +880,21 @@ def _build_sql_query_core(intent: str, query: str, db_conn, district: Optional[s
                      WHERE a.criminal_history > 0
                      GROUP BY a.accused_id ORDER BY prior_cases DESC LIMIT 20"""
             return sql, [], "table"
-        elif "gang" in query.lower():
+        elif "gang" in query_lower:
+            if is_count_query:
+                sql = """SELECT COUNT(*) as gang_affiliated_count FROM accused
+                         WHERE gang_affiliation IS NOT NULL AND gang_affiliation != ''"""
+                return sql, [], "number"
             sql = """SELECT gang_affiliation, COUNT(*) as member_count,
                             AVG(age) as avg_age, COUNT(DISTINCT fir_id) as cases_involved
                      FROM accused WHERE gang_affiliation IS NOT NULL AND gang_affiliation != ''
                      GROUP BY gang_affiliation ORDER BY member_count DESC"""
             return sql, [], "table"
-        elif "wanted" in query.lower() or "absconding" in query.lower():
+        elif "wanted" in query_lower or "absconding" in query_lower:
+            if is_count_query:
+                sql = """SELECT COUNT(*) as wanted_or_absconding_count FROM accused
+                         WHERE arrest_status IN ('Wanted','Absconding')"""
+                return sql, [], "number"
             sql = """SELECT a.name, a.age, a.occupation, f.crime_type, d.district_name, a.gang_affiliation
                      FROM accused a
                      JOIN fir_cases f ON a.fir_id = f.fir_id
@@ -743,12 +903,24 @@ def _build_sql_query_core(intent: str, query: str, db_conn, district: Optional[s
                      WHERE a.arrest_status IN ('Wanted','Absconding')
                      ORDER BY f.severity_score DESC LIMIT 30"""
             return sql, [], "table"
+        elif is_count_query:
+            sql = "SELECT COUNT(*) as total_accused FROM accused"
+            return sql, [], "number"
         else:
             sql = """SELECT arrest_status, COUNT(*) as count FROM accused
                      GROUP BY arrest_status ORDER BY count DESC"""
             return sql, [], "pie"
 
     elif intent == "victim_stats":
+        if shape == "count":
+            # "How many victims are there?" (optionally "female"/"male"/
+            # "child" victims) -- a single count, not the full age/gender
+            # breakdown chart.
+            where_clause, _subject = _extract_victim_filter(query)
+            sql = "SELECT COUNT(*) as total_victims FROM victims v"
+            if where_clause:
+                sql += f" WHERE {where_clause}"
+            return sql, [], "number"
         sql = """SELECT
                    CASE WHEN v.age < 18 THEN 'Minor (<18)'
                         WHEN v.age < 30 THEN 'Youth (18-29)'
@@ -759,11 +931,40 @@ def _build_sql_query_core(intent: str, query: str, db_conn, district: Optional[s
         return sql, [], "bar"
 
     elif intent == "case_status":
+        status = extract_case_status(query)
+        if shape == "count":
+            # "How many cases are pending/closed/etc?" -- filter to the
+            # mentioned status (if any) and answer with a single count,
+            # instead of the full status-breakdown pie chart.
+            sql = "SELECT COUNT(*) as total_cases FROM fir_cases"
+            if status:
+                sql += " WHERE status = ?"
+                return sql, [status], "number"
+            return sql, [], "number"
+        if status:
+            sql = "SELECT status, COUNT(*) as case_count FROM fir_cases WHERE status = ? GROUP BY status"
+            return sql, [status], "pie"
         sql = """SELECT status, COUNT(*) as case_count FROM fir_cases
                  GROUP BY status ORDER BY case_count DESC"""
         return sql, [], "pie"
 
     elif intent == "property_crime":
+        ptype = extract_property_type(query)
+        if shape == "count":
+            # "How many mobile phones were stolen?" / "how many items were
+            # stolen?" -- a single count of items, not the value/recovery
+            # breakdown bar chart.
+            sql = "SELECT COUNT(*) as total_items FROM stolen_property"
+            if ptype:
+                sql += " WHERE property_type = ?"
+                return sql, [ptype], "number"
+            return sql, [], "number"
+        if ptype:
+            sql = """SELECT property_type, COUNT(*) as items_stolen,
+                            SUM(estimated_value) as total_value,
+                            SUM(recovered) as recovered_count
+                     FROM stolen_property WHERE property_type = ? GROUP BY property_type"""
+            return sql, [ptype], "table"
         sql = """SELECT property_type, COUNT(*) as items_stolen,
                         SUM(estimated_value) as total_value,
                         SUM(recovered) as recovered_count
@@ -771,6 +972,12 @@ def _build_sql_query_core(intent: str, query: str, db_conn, district: Optional[s
         return sql, [], "bar"
 
     elif intent == "severity":
+        if shape == "count":
+            # "How many severe/high-severity cases are there?" -- count
+            # rather than list all 25 rows.
+            sql = """SELECT COUNT(*) as total_cases FROM fir_cases
+                     WHERE severity_score >= 8"""
+            return sql, [], "number"
         sql = """SELECT f.fir_number, f.crime_type, f.date_of_incident, d.district_name,
                         f.severity_score, f.status
                  FROM fir_cases f
@@ -788,6 +995,11 @@ def _build_sql_query_core(intent: str, query: str, db_conn, district: Optional[s
         return sql, [], "line"
 
     elif intent == "network_analysis":
+        if shape == "count":
+            # "How many gang members / criminal network members are there?"
+            sql = """SELECT COUNT(DISTINCT accused_id) as total_members
+                     FROM accused WHERE gang_affiliation IS NOT NULL AND gang_affiliation != ''"""
+            return sql, [], "number"
         sql = """SELECT a.name, a.gang_affiliation, COUNT(DISTINCT a.fir_id) as cases,
                         GROUP_CONCAT(DISTINCT f.crime_type) as crime_types,
                         a.criminal_history
@@ -798,6 +1010,16 @@ def _build_sql_query_core(intent: str, query: str, db_conn, district: Optional[s
         return sql, [], "network"
 
     elif intent == "officer_stats":
+        if shape == "count":
+            # This intent covers both "how many officers?" and "how many
+            # (police) stations?" (the pattern list includes both keywords)
+            # -- check which noun the query actually used so the count
+            # matches the right table.
+            if re.search(r"stations?\b", query.lower()) and "officer" not in query.lower():
+                sql = "SELECT COUNT(*) as total_stations FROM police_stations"
+            else:
+                sql = "SELECT COUNT(*) as total_officers FROM officers"
+            return sql, [], "number"
         sql = """SELECT o.name, o.rank, ps.station_name, d.district_name, o.cases_handled
                  FROM officers o
                  JOIN police_stations ps ON o.station_id = ps.station_id
@@ -806,7 +1028,13 @@ def _build_sql_query_core(intent: str, query: str, db_conn, district: Optional[s
         return sql, [], "table"
 
     else:
-        # General fallback
+        # General fallback -- if the question was clearly a count question
+        # but didn't match a more specific intent, answer with an overall
+        # case count instead of the generic "top crime types" bar chart,
+        # which would otherwise be an unrelated non-answer.
+        if shape == "count":
+            sql = "SELECT COUNT(*) as total_cases FROM fir_cases"
+            return sql, [], "number"
         sql = """SELECT crime_type, COUNT(*) as case_count,
                         AVG(severity_score) as avg_severity
                  FROM fir_cases GROUP BY crime_type ORDER BY case_count DESC LIMIT 10"""
@@ -941,20 +1169,73 @@ def _generate_deterministic_response(query: str, intents: list, results: list, c
     return f"{note}{body}"
 
 
+def _build_count_response(query: str, intent: str, results: list, district: Optional[str], year: Optional[int], crime_type: Optional[str]) -> str:
+    """Single shared phrase-builder for every 'count' shaped answer, so
+    wording stays consistent across intents instead of being hand-written
+    (and easy to get subtly wrong/mismatched) in each branch separately."""
+    count = list(results[0].values())[0]
+    query_lower = query.lower()
+
+    if intent == "accused_search":
+        # Describe *who* is being counted (wanted/gang/repeat offenders)
+        # instead of the generic "cases" phrasing used for crime counts.
+        if "wanted" in query_lower or "absconding" in query_lower:
+            subject = "accused who are still **Wanted / Absconding**"
+        elif "gang" in query_lower:
+            subject = "accused with a recorded **gang affiliation**"
+        elif "repeat" in query_lower or "history" in query_lower:
+            subject = "accused with a **prior criminal history**"
+        else:
+            subject = "accused"
+        return f"📊 There are **{count:,}** {subject} in the KSP database."
+
+    if intent == "victim_stats":
+        _where, subject = _extract_victim_filter(query)
+        return f"📊 There are **{count:,}** {subject} recorded in the KSP database."
+
+    if intent == "case_status":
+        status = extract_case_status(query)
+        subject = f"cases with status **{status}**" if status else "total cases"
+        return f"📊 There are **{count:,}** {subject} in the KSP database."
+
+    if intent == "property_crime":
+        ptype = extract_property_type(query)
+        subject = f"stolen **{ptype}** items" if ptype else "stolen-property items"
+        return f"📊 There are **{count:,}** {subject} recorded in the KSP database."
+
+    if intent == "severity":
+        return f"📊 There are **{count:,}** high-severity cases (severity score ≥ 8) in the KSP database."
+
+    if intent == "network_analysis":
+        return f"📊 There are **{count:,}** accused with a recorded gang/network affiliation in the KSP database."
+
+    if intent == "officer_stats":
+        if re.search(r"stations?\b", query_lower) and "officer" not in query_lower:
+            return f"📊 There are **{count:,}** police stations recorded in the KSP database."
+        return f"📊 There are **{count:,}** officers recorded in the KSP database."
+
+    if intent == "crime_by_district":
+        return f"📊 There are **{count:,}** districts in the KSP database."
+
+    if intent == "hotspot":
+        return f"📊 There are **{count:,}** hotspot stations (20+ recorded cases) in the KSP database."
+
+    parts = []
+    if crime_type:
+        parts.append(f"of **{crime_type}**")
+    if district:
+        parts.append(f"in **{district.title()}**")
+    if year:
+        parts.append(f"in **{year}**")
+    context = f" {' '.join(parts)}" if parts else ""
+    return f"📊 There are **{count:,}** total cases{context} in the KSP database."
+
+
 def _build_deterministic_body(query: str, intents: list, results: list, chart_type: str, district: Optional[str], year: Optional[int], crime_type: Optional[str]) -> str:
     intent = intents[0] if intents else "general"
 
     if chart_type == "number":
-        count = list(results[0].values())[0]
-        parts = []
-        if crime_type:
-            parts.append(f"of **{crime_type}**")
-        if district:
-            parts.append(f"in **{district.title()}**")
-        if year:
-            parts.append(f"in **{year}**")
-        context = f" {' '.join(parts)}" if parts else ""
-        return f"📊 There are **{count:,}** total cases{context} in the KSP database."
+        return _build_count_response(query, intent, results, district, year, crime_type)
 
     if intent == "crime_by_district":
         total = sum(r.get("case_count", 0) for r in results)
@@ -994,8 +1275,38 @@ def _build_deterministic_body(query: str, intents: list, results: list, chart_ty
             intro=intro,
         )
 
+    if intent == "victim_stats":
+        intro = "🧍 Age-group and gender breakdown of recorded victims"
+        return _build_markdown_table(
+            results,
+            [("Age Group", "age_group"), ("Gender", "gender"), ("Victims", "victim_count")],
+            title="Victim Demographics",
+            intro=intro,
+        )
+
+    if intent == "severity":
+        intro = "🚨 Cases with severity score ≥ 8, most severe first"
+        return _build_markdown_table(
+            results,
+            [("FIR Number", "fir_number"), ("Crime Type", "crime_type"), ("Date", "date_of_incident"),
+             ("District", "district_name"), ("Severity", "severity_score"), ("Status", "status")],
+            title="High-Severity Cases",
+            intro=intro,
+        )
+
+    if intent == "officer_stats":
+        intro = "👮 Officers ranked by number of cases handled"
+        return _build_markdown_table(
+            results,
+            [("Name", "name"), ("Rank", "rank"), ("Station", "station_name"),
+             ("District", "district_name"), ("Cases Handled", "cases_handled")],
+            title="Officer Performance",
+            intro=intro,
+        )
+
     if intent == "case_status":
-        intro = "📋 Current status of registered cases"
+        status = extract_case_status(query)
+        intro = f"📋 Cases with status **{status}**" if status else "📋 Current status of registered cases"
         return _build_markdown_table(
             results,
             [("Status", "status"), ("Cases", "case_count")],
@@ -1005,18 +1316,19 @@ def _build_deterministic_body(query: str, intents: list, results: list, chart_ty
 
     if intent == "accused_search":
         if results and "error" not in results[0]:
-            columns = [("Field", "field"), ("Value", "value")]
-            normalized_rows = []
-            for r in results[:8]:
-                for key, value in r.items():
-                    if value is not None and value != "":
-                        normalized_rows.append({"field": key, "value": value})
+            # Build a normal one-row-per-record table using whichever columns
+            # this particular sub-query actually returned (name/age/... for
+            # wanted/repeat-offender lists, gang_affiliation/member_count for
+            # gang summaries, arrest_status/count for the general breakdown)
+            # instead of flattening every field into its own row -- that
+            # made row counts (and "showing first N of M") meaningless.
+            columns = [(key.replace("_", " ").title(), key) for key in results[0].keys()]
             return _build_markdown_table(
-                normalized_rows,
+                results,
                 columns,
                 title="Accused / Criminal Data",
-                intro="📋 Key details from the matching records",
-                max_rows=12,
+                intro="📋 Matching records",
+                max_rows=15,
             )
 
     if intent == "predictive":
@@ -1038,7 +1350,8 @@ def _build_deterministic_body(query: str, intents: list, results: list, chart_ty
         )
 
     if intent == "property_crime":
-        intro = "💰 Property loss and recovery summary"
+        ptype = extract_property_type(query)
+        intro = f"💰 **{ptype}** loss and recovery summary" if ptype else "💰 Property loss and recovery summary"
         return _build_markdown_table(
             results,
             [("Property Type", "property_type"), ("Items Stolen", "items_stolen"), ("Value", "total_value"), ("Recovered", "recovered_count")],

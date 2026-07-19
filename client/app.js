@@ -381,6 +381,7 @@ function renderResponseChart(data) {
   panel.classList.remove("hidden");
 
   const chartTitle = document.getElementById("chartTitle");
+  const chartContainer = document.querySelector(".chart-container");
   const tableContainer = document.getElementById("tableContainer");
   const ctx = document.getElementById("responseChart").getContext("2d");
 
@@ -388,13 +389,15 @@ function renderResponseChart(data) {
 
   if (data.chart_type === "table") {
     chartTitle.textContent = "📋 Data Table";
-    document.getElementById("responseChart").style.display = "none";
+    // Hide the whole fixed-height chart container (not just the canvas),
+    // otherwise its reserved height leaves a blank gap above the table.
+    chartContainer.style.display = "none";
     tableContainer.style.display = "block";
     tableContainer.innerHTML = buildTable(data.data);
     return;
   }
 
-  document.getElementById("responseChart").style.display = "block";
+  chartContainer.style.display = "block";
   tableContainer.style.display = "none";
 
   const items = data.data.slice(0, 20);
