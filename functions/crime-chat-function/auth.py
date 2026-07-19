@@ -133,9 +133,19 @@ def delete_session(conn: sqlite3.Connection, token: str):
 
 
 def extract_token(req) -> str:
-    """Pull the bearer token out of the Authorization header (or the
-    X-Auth-Token fallback header, useful for simple GET requests)."""
+    """Pull the session token out of the request.
+
+    Prefers the custom X-Auth-Token header because Zoho Catalyst's Advanced
+    I/O gateway intercepts the standard "Authorization" header and tries to
+    validate it as its OWN OAuth token, rejecting our app-level session
+    tokens with a 401 before the request ever reaches this Flask app.
+    "Authorization: Bearer <token>" is kept as a fallback for local
+    development / other hosting environments.
+    """
+    token = req.headers.get("X-Auth-Token", "").strip()
+    if token:
+        return token
     header = req.headers.get("Authorization", "")
     if header.startswith("Bearer "):
         return header[len("Bearer "):].strip()
-    return req.headers.get("X-Auth-Token", "").strip()
+    return ""

@@ -44,7 +44,13 @@ let currentUser = null; // { username, role, full_name, badge_number }
 
 function authHeaders(extra) {
   const h = Object.assign({ "Content-Type": "text/plain;charset=utf-8" }, extra || {});
-  if (authToken) h["Authorization"] = `Bearer ${authToken}`;
+  // NOTE: Zoho Catalyst's Advanced I/O gateway intercepts the standard
+  // "Authorization" header and tries to validate it as its OWN OAuth token,
+  // rejecting our custom session tokens with a 401 "invalid oauth token"
+  // before the request ever reaches our Flask app. Using a custom header
+  // name avoids that collision (see auth.extract_token() on the backend,
+  // which reads X-Auth-Token first).
+  if (authToken) h["X-Auth-Token"] = authToken;
   return h;
 }
 
