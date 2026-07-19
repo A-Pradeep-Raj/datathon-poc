@@ -459,14 +459,14 @@ Call `POST /api/init-db` once after deployment to seed the database.
 |---------|--------|-----|
 | ✅ NL Chatbot – English | Done | 15-intent pattern matching → SQL |
 | ✅ NL Chatbot – Kannada | Done | Keyword map in `ai_engine.py` |
-| ✅ Voice input | Done | Web Speech API (`kn-IN` + `en-IN`) |
-| ✅ Context-aware chat | Done | Conversation history in `app.js` |
-| ✅ PDF export | Done | jsPDF client-side + `/api/export-pdf` |
-| ✅ Criminal network viz | Done | vis-network.js |
+| ✅ Voice input + output | Done | Web Speech `SpeechRecognition` (`kn-IN` + `en-IN`) input, `SpeechSynthesis` output |
+| ✅ Context-aware chat | Done | Session-scoped district/year/crime-type resolution in `index.py` |
+| ✅ PDF export | Done | jsPDF client-side + `/api/export-pdf` (role-gated: Admin/SP/Inspector) |
+| ✅ Criminal network viz | Done | vis-network.js (role-gated: Admin/SP/Inspector) |
 | ✅ Trend & hotspot detection | Done | Dashboard + Analytics tabs |
-| ✅ Predictive analytics | Done | 24-month trend analysis |
-| ✅ Explainable AI / Audit Trail | Done | SQL shown per query + Audit tab |
-| ✅ Role-based UI | Done | Officer badge in header |
+| ✅ Predictive analytics | Done | QuickML-generated trend commentary + AutoML anomaly scan |
+| ✅ Explainable AI / Audit Trail | Done | Full SQL + intents + context logged in the dedicated Audit Trail tab (kept out of the chat bubble to stay end-user friendly) |
+| ✅ Role-based secure access | Done | Login-gated app; 4 roles (Admin/SP/Inspector/Analyst) enforced server-side via `require_role()` in `auth.py` |
 | ✅ 1500+ synthetic FIR records | Done | `synthetic_data.py` |
 | ✅ Crime heatmap | Done | Canvas-based Karnataka map |
 | ✅ Multi-chart visualizations | Done | Chart.js |
