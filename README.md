@@ -29,7 +29,85 @@ KRIME AI lets police officers and analysts ask questions about crime data in pla
 
 ---
 
-## 🏗️ Project Structure
+## �️ Architecture
+
+```mermaid
+graph TB
+    subgraph Client["🖥️ Frontend Layer"]
+        Slate["Catalyst Slate<br/>(krime-ai-slate)"]
+        WebClient["Catalyst Web Client<br/>(public/ ↔ client/)<br/>HTML · CSS · Vanilla JS"]
+        Libs["Chart.js · vis-network<br/>jsPDF · Marked.js<br/>Web Speech API (STT/TTS)"]
+        Login["🔐 Login Screen<br/>(session token in sessionStorage)"]
+    end
+
+    subgraph GatewayGroup["☁️ Zoho Catalyst Platform"]
+        Func["Serverless Function<br/>crime-chat-function<br/>(Advanced I/O · Flask · Python 3.11)"]
+    end
+
+    subgraph Backend["⚙️ Backend Logic"]
+        AuthPy["auth.py<br/>Users · Sessions<br/>require_role() decorator"]
+        IndexPy["index.py<br/>API routes · CORS<br/>Session context · Audit log"]
+        AiEngine["ai_engine.py<br/>NL→SQL · Intent detection<br/>Kannada translation<br/>Response generation"]
+        SynthData["synthetic_data.py<br/>DB schema + seed (1500 FIRs)"]
+    end
+
+    subgraph Data["🗄️ Data Layer"]
+        SQLite[("SQLite<br/>ksp_crime.db<br/>districts · stations · fir_cases<br/>accused · victims · officers<br/>users · sessions · audit_log")]
+        Docs["docs/<br/>KSP SOP Manual<br/>station_crime_stats.csv"]
+    end
+
+    subgraph QuickML["🧠 Catalyst QuickML (AI Services)"]
+        GLM["GLM-4.7-Flash<br/>NL insight generation"]
+        RAG["RAG Engine<br/>Document Q&A<br/>(SOP Knowledge Base)"]
+        AutoML["AutoML Pipeline<br/>Anomaly/hotspot<br/>classification model"]
+    end
+
+    User["👮 Investigator / Analyst<br/>(Admin, SP, Inspector, Analyst)"]
+
+    User -->|HTTPS| Login
+    Login -->|"X-Auth-Token header"| WebClient
+    WebClient --> Slate
+    WebClient --> Libs
+    WebClient -->|"fetch() /api/*"| Func
+
+    Func --> IndexPy
+    IndexPy --> AuthPy
+    IndexPy --> AiEngine
+    AuthPy -->|"users/auth_sessions tables"| SQLite
+    IndexPy -->|"fir_cases, accused, victims,<br/>audit_log, session_context"| SQLite
+    AiEngine -->|"SQL queries"| SQLite
+    SynthData -.->|seeds| SQLite
+
+    AiEngine -->|OAuth + HTTPS| GLM
+    AiEngine -->|OAuth + HTTPS| RAG
+    AiEngine -->|OAuth + HTTPS| AutoML
+    RAG -.->|indexed from| Docs
+
+    GLM -.->|insight text| IndexPy
+    RAG -.->|answer + sources| IndexPy
+    AutoML -.->|anomaly flags| IndexPy
+
+    IndexPy -->|JSON response| WebClient
+    WebClient -->|render| User
+
+    style Client fill:#1a2744,stroke:#1a73e8,color:#e6edf3
+    style GatewayGroup fill:#0d1117,stroke:#fbbc04,color:#e6edf3
+    style Backend fill:#161b22,stroke:#34a853,color:#e6edf3
+    style Data fill:#161b22,stroke:#e53935,color:#e6edf3
+    style QuickML fill:#1c2128,stroke:#ab47bc,color:#e6edf3
+```
+
+**Key architectural notes:**
+
+1. **Auth flow**: Login issues a session token stored in `sessionStorage`; all subsequent API calls send it via `X-Auth-Token` (not `Authorization`, since Catalyst's gateway intercepts that header for its own OAuth validation).
+2. **Role gating** happens at two layers: server-side via the `require_role()` decorator on Flask routes (source of truth), and client-side via `data-roles` attributes hiding UI elements (UX convenience).
+3. **AI Engine** is the core NL→SQL translator: it detects intent, resolves conversational context (district/year/crime type), builds parameterized SQL, executes against SQLite, then optionally enriches the answer via QuickML's GLM model.
+4. **Three separate QuickML integrations**: chat insights (GLM), document Q&A (RAG over the SOP manual), and anomaly detection (a trained AutoML classifier scanning station-level stats).
+5. **Dual frontend hosting**: the same UI is deployed both to Catalyst Slate (static CDN hosting) and the Catalyst Web Client (same-origin with the function) — `public/` and `client/` are kept in sync.
+
+---
+
+## �🏗️ Project Structure
 
 ```
 ksp-crime-ai/
