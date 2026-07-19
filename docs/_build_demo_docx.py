@@ -243,13 +243,14 @@ add_bullets([
     "a trained classification model that flags police stations whose case volume/severity "
     "statistically deviates from normal.",
 ])
-add_image("06-anomaly-detection.png", "Anomaly detection results flagging 2 stations")
+add_image("06-anomaly-detection.png", "Anomaly detection results flagging an anomalous station")
 add_body("Talking points:", bold=True)
 add_bullets([
     'This directly satisfies the "custom pipeline builders for anomaly or fraud detection '
-    'models" requirement — it\'s a real trained AutoML endpoint, not a mock.',
-    "Flagged stations (e.g. Bajpe, Ullal in Mangaluru) show case count, average severity, "
-    "pending count, and high-severity count — actionable for administrative review.",
+    "models\" requirement — it's a real trained AutoML endpoint, not a mock.",
+    "Flagged stations (results vary per scan since severity is randomized in the synthetic "
+    "dataset) show case count, average severity, pending count, and high-severity count — "
+    "actionable for administrative review.",
 ])
 add_divider()
 

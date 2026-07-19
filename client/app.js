@@ -771,6 +771,9 @@ async function loadDashChart(canvasId, chartId, defaultType) {
 
 // ── ANALYTICS ─────────────────────────────────────────────────────────────
 async function loadAnalytics() {
+  await loadDashChart("ana-monthly", "monthly_trend", "line");
+  await loadDashChart("ana-hotspot", "top_hotspots", "bar");
+  await loadDashChart("ana-property", "property_recovery", "bar");
   await loadDashChart("ana-gender", "gender_accused", "pie");
   loadPredictive();
 }

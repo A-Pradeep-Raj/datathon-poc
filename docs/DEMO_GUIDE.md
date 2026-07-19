@@ -88,11 +88,11 @@ Click **📈 Analytics**.
 - **🔮 AI Predictive Insights** box: QuickML-generated commentary on year-over-year trends, flagging upward/downward trajectories as early warnings.
 - Scroll down and click **"Scan Stations"** to trigger the **custom QuickML AutoML pipeline** — a trained classification model that flags police stations whose case volume/severity statistically deviates from normal.
 
-![Anomaly detection results flagging 2 stations](./demo-screenshots/06-anomaly-detection.png)
+![Anomaly detection results flagging an anomalous station](./demo-screenshots/06-anomaly-detection.png)
 
 **Talking points:**
 - This directly satisfies the *"custom pipeline builders for anomaly or fraud detection models"* requirement — it's a real trained AutoML endpoint, not a mock.
-- Flagged stations (e.g. Bajpe, Ullal in Mangaluru) show case count, average severity, pending count, and high-severity count — actionable for administrative review.
+- Flagged stations (results vary per scan since severity is randomized in the synthetic dataset) show case count, average severity, pending count, and high-severity count — actionable for administrative review.
 
 ---
 
