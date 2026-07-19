@@ -33,19 +33,13 @@ From technology perspective deploy front-end using Catalyst Slate and backend us
 (which supports Spring Boot or Flask), use Catalyst’s in-house AI service, QuickML (which provides GLM 4.7 and Qwen 3.6), 
 Retrieval-Augmented Generation (RAG) for document querying, and custom pipeline builders for anomaly or fraud detection models.
 
-Staus : 19 July
-• Natural language chatbot (English + Kannada) --> Implemented
-• Voice-enabled interaction --> Implemented (speech-to-text input + text-to-speech output)
-• Context-aware conversations --> Implemented
-• PDF export of conversation history --> Implemented (role-gated: Admin/SP/Inspector)
-• Criminal network visualization --> Implemented (role-gated: Admin/SP/Inspector)
-• Crime trend & hotspot detection--> Implemented
-• Predictive analytics & early warnings --> Partial
-• Explainable AI with audit trails --> Implemented
-• Role-based secure access --> Implemented (Admin / SP / Inspector / Analyst roles, login screen + backend enforcement)
-
 Zoho Console URL: https://console.catalyst.zoho.in/baas/60078097690/index#/
 
 Zoho App URL: https://krime-ai-60078097690.development.catalystserverless.in/app/index.html
 
+Role	    Username	Password
+Admin	    admin	    Admin@123
+SP	        sp.blru	    Sp@12345
+Inspector	inspector1	Inspector@123
+Analyst	    analyst1	Analyst@123
 

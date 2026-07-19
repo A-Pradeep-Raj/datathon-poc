@@ -106,6 +106,8 @@ Open your browser at **http://localhost:3000**
 
 Full instructions (including Zoho Catalyst cloud deployment) are in [`DEPLOYMENT_GUIDE.md`](./DEPLOYMENT_GUIDE.md).
 
+🎬 **Presenting to judges?** See the [**Demo Guide**](./docs/DEMO_GUIDE.md) for a step-by-step walkthrough script with screenshots of every feature.
+
 ---
 
 ## 🔌 API Endpoints

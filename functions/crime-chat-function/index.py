@@ -288,8 +288,10 @@ def rag_query():
 
     try:
         body = request.get_json(force=True)
-        question = (body.get("query") or "").strip()        # NOTE: RAG doc Q&A allowed for all authenticated roles (see decorator
-        # applied to the route below).        document_ids = body.get("document_ids")  # optional override
+        question = (body.get("query") or "").strip()
+        # NOTE: RAG doc Q&A allowed for all authenticated roles (see decorator
+        # applied to the route below).
+        document_ids = body.get("document_ids")  # optional override
 
         if not question:
             return jsonify({"success": False, "error": "Query is empty"}), 400
