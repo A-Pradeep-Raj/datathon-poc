@@ -16,6 +16,8 @@ KRIME AI lets police officers and analysts ask questions about crime data in pla
 
 **Key capabilities:**
 - 💬 Natural language chat interface (English + ಕನ್ನಡ), with **context-aware, multi-turn conversations** — follow-up questions like *"what about theft?"* automatically resolve entities (district/year/crime type) remembered from earlier in the chat
+- 🎤 **Voice-enabled interaction** — speak your query (Web Speech `SpeechRecognition`, English/Kannada) and hear AI responses read back (`SpeechSynthesis`), toggleable via the 🔊 button
+- 🔐 **Role-based secure access** — sign-in gated platform with 4 roles (Admin, SP, Inspector, Analyst), each with a different slice of permissions (e.g. only Admin can reseed the database; Analysts can't view the criminal network graph or export PDF reports)
 - 🔎 NL → SQL translation with explainable, auditable queries (full audit trail, including which entities were carried over from context)
 - 🧠 AI-generated natural-language insights on every answer via Catalyst QuickML (GLM-4.7-Flash)
 - 📚 Retrieval-Augmented Generation (RAG) document Q&A over the KSP SOP Investigation Manual
@@ -50,6 +52,8 @@ ksp-crime-ai/
 │       ├── index.py                       ← Flask app entry point / API routes
 │       ├── ai_engine.py                   ← NL→SQL translation, context resolution,
 │       │                                    response generation, QuickML integrations
+│       ├── auth.py                        ← Role-based secure access (users, sessions,
+│       │                                    require_role() decorator)
 │       ├── synthetic_data.py              ← Synthetic DB seed (1500 FIR cases)
 │       ├── catalyst-config.json           ← Function config for Catalyst CLI
 │       └── requirements.txt               ← Python dependencies
@@ -95,7 +99,10 @@ Full instructions (including Zoho Catalyst cloud deployment) are in [`DEPLOYMENT
 | Endpoint | Method | Description |
 |---|---|---|
 | `/api/health` | GET | Health check |
-| `/api/chat` | POST | Main conversational AI endpoint (context-aware; returns `context_used` / `resolved_entities`) |
+| `/api/auth/login` | POST | Sign in with username/password, returns a bearer session token + user profile |
+| `/api/auth/logout` | POST | Invalidate the current session token |
+| `/api/auth/me` | GET | Validate a token and return the current user's profile |
+| `/api/chat` | POST | Main conversational AI endpoint (context-aware; returns `context_used` / `resolved_entities`) — requires auth |
 | `/api/reset-context` | POST | Clears a session's remembered conversation context (used by "New Chat") |
 | `/api/dashboard` | GET | Key performance indicators |
 | `/api/chart-data` | POST | Chart-ready aggregated data |
@@ -115,6 +122,25 @@ Full instructions (including Zoho Catalyst cloud deployment) are in [`DEPLOYMENT
 2. *"What about theft?"* → reuses district = Mysuru (carried over) + crime type = Theft (fresh)
 
 The response includes a transparent **"🧭 Continuing from earlier in this chat…"** note whenever context was carried over, and the audit trail records exactly which entity was remembered — keeping the AI explainable. Saying things like *"never mind"* or *"start over"* resets the carried context. Starting a "New Chat" in the UI also calls `/api/reset-context` and issues a fresh `session_id`.
+
+### 🔐 Role-based secure access
+
+The platform requires sign-in before any feature is usable. Authentication is a lightweight, self-contained username/password + bearer-token system (SQLite-backed, SHA-256+salt hashed passwords, 12-hour session TTL) — no external identity provider needed for the POC.
+
+**Demo accounts** (shown on the login screen for judges):
+
+| Username | Password | Role | Permissions |
+|---|---|---|---|
+| `admin` | `Admin@123` | Admin | Full access, including destructive ops (Reload/reseed DB) |
+| `sp.blru` | `Sp@12345` | SP | Full investigative + analytics access |
+| `inspector1` | `Inspector@123` | Inspector | Chat, dashboards, analytics, network graph, PDF export |
+| `analyst1` | `Analyst@123` | Analyst | Read-only chat/dashboards/analytics — **no** network graph, PDF export, or anomaly scan (protects identifiable criminal-network data from non-investigative staff) |
+
+Every sensitive API route is protected server-side by a `require_role(*roles)` decorator in `index.py` (see `functions/crime-chat-function/auth.py`), so permissions are enforced even if a user bypasses the UI. The frontend additionally hides role-restricted buttons/tabs via `data-roles="Role1,Role2"` attributes and the `applyRoleGating()` function in `app.js`.
+
+### 🎤 Voice-enabled interaction
+
+Click the 🎤 button to speak your query (Web Speech `SpeechRecognition`, supports English `en-IN` and Kannada `kn-IN`) — it auto-sends once you stop talking. AI responses are read back aloud via `SpeechSynthesis`; toggle voice replies on/off with the 🔊/🔇 button next to the chat toolbar. Voice input degrades gracefully (the mic button hides itself) in browsers without Web Speech API support.
 
 ---
 

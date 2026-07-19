@@ -8,8 +8,9 @@ import sys
 import sqlite3
 import hashlib
 import base64
+import functools
 from datetime import datetime
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, g
 
 # Ensure stdout/stderr handle UTF-8 (important on Windows for Kannada text)
 if sys.stdout.encoding != "utf-8":
@@ -24,6 +25,7 @@ from ai_engine import (
     execute_query, generate_natural_response, get_dashboard_stats, query_rag,
     scan_stations_for_anomalies
 )
+import auth as auth_module
 
 app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False   # Ensure Kannada / Unicode chars are not escaped
@@ -65,6 +67,95 @@ def after_request(response):
     return add_cors(response)
 
 
+# ── Role-Based Secure Access ─────────────────────────────────────────────────
+# Every route below (except /api/health and /api/auth/login) requires a
+# valid session token. Certain routes additionally restrict which ROLE may
+# call them, e.g. only Admin can wipe/reseed the database, and Analysts
+# cannot view the criminal network graph or export PDF reports (protects
+# sensitive identity data from non-investigative roles).
+
+def require_role(*allowed_roles):
+    """Decorator: reject the request unless it carries a valid session
+    token AND (when allowed_roles is given) the user's role is included.
+    The authenticated user dict is stashed on flask.g.current_user."""
+    def decorator(view_func):
+        @functools.wraps(view_func)
+        def wrapped(*args, **kwargs):
+            if request.method == "OPTIONS":
+                return view_func(*args, **kwargs)
+            token = auth_module.extract_token(request)
+            conn = get_db()
+            user = auth_module.get_session_user(conn, token)
+            conn.close()
+            if not user:
+                return jsonify({"success": False, "error": "Unauthorized: please sign in.", "code": "AUTH_REQUIRED"}), 401
+            if allowed_roles and user["role"] not in allowed_roles:
+                return jsonify({
+                    "success": False,
+                    "error": f"Forbidden: role '{user['role']}' cannot access this feature (requires {', '.join(allowed_roles)}).",
+                    "code": "FORBIDDEN"
+                }), 403
+            g.current_user = user
+            return view_func(*args, **kwargs)
+        return wrapped
+    return decorator
+
+
+@app.route("/api/auth/login", methods=["POST", "OPTIONS"])
+def auth_login():
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+    try:
+        body = request.get_json(force=True)
+        username = (body.get("username") or "").strip()
+        password = body.get("password") or ""
+        if not username or not password:
+            return jsonify({"success": False, "error": "Username and password are required"}), 400
+
+        conn = get_db()
+        user = auth_module.verify_login(conn, username, password)
+        if not user:
+            conn.close()
+            return jsonify({"success": False, "error": "Invalid username or password"}), 401
+
+        token = auth_module.create_session(conn, user)
+        conn.close()
+        return jsonify({
+            "success": True,
+            "token": token,
+            "user": user,
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/auth/logout", methods=["POST", "OPTIONS"])
+def auth_logout():
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+    try:
+        token = auth_module.extract_token(request)
+        conn = get_db()
+        auth_module.delete_session(conn, token)
+        conn.close()
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/auth/me", methods=["GET", "OPTIONS"])
+def auth_me():
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+    token = auth_module.extract_token(request)
+    conn = get_db()
+    user = auth_module.get_session_user(conn, token)
+    conn.close()
+    if not user:
+        return jsonify({"success": False, "error": "Not authenticated"}), 401
+    return jsonify({"success": True, "user": user})
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 PUBLIC_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "public")
@@ -85,6 +176,7 @@ def health():
 
 
 @app.route("/api/dashboard", methods=["GET"])
+@require_role()  # any authenticated role
 def dashboard():
     """Return key performance indicators for the dashboard"""
     try:
@@ -97,6 +189,7 @@ def dashboard():
 
 
 @app.route("/api/chat", methods=["POST", "OPTIONS"])
+@require_role()  # any authenticated role
 def chat():
     """Main conversational AI endpoint"""
     if request.method == "OPTIONS":
@@ -182,6 +275,7 @@ def chat():
 
 
 @app.route("/api/rag-query", methods=["POST", "OPTIONS"])
+@require_role()  # any authenticated role
 def rag_query():
     """
     Retrieval-Augmented Generation (RAG) endpoint for querying uploaded
@@ -194,8 +288,8 @@ def rag_query():
 
     try:
         body = request.get_json(force=True)
-        question = (body.get("query") or "").strip()
-        document_ids = body.get("document_ids")  # optional override
+        question = (body.get("query") or "").strip()        # NOTE: RAG doc Q&A allowed for all authenticated roles (see decorator
+        # applied to the route below).        document_ids = body.get("document_ids")  # optional override
 
         if not question:
             return jsonify({"success": False, "error": "Query is empty"}), 400
@@ -216,6 +310,7 @@ def rag_query():
 
 
 @app.route("/api/anomaly-scan", methods=["GET", "POST", "OPTIONS"])
+@require_role("Admin", "SP", "Inspector")  # Analysts excluded: flags sensitive station-level data
 def anomaly_scan():
     """
     Custom QuickML pipeline endpoint: scans all police stations' crime
@@ -243,6 +338,7 @@ def anomaly_scan():
 
 
 @app.route("/api/chart-data", methods=["POST"])
+@require_role()  # any authenticated role
 def chart_data():
     """Return chart-ready data for a specific metric"""
     try:
@@ -335,6 +431,7 @@ def chart_data():
 
 
 @app.route("/api/network", methods=["GET"])
+@require_role("Admin", "SP", "Inspector")  # Analysts excluded: identifiable criminal-network data
 def criminal_network():
     """Return network graph data for criminal network visualization"""
     try:
@@ -393,6 +490,7 @@ def criminal_network():
 
 
 @app.route("/api/heatmap", methods=["GET"])
+@require_role()  # any authenticated role
 def heatmap():
     """Return lat/lon data for crime heatmap"""
     try:
@@ -423,6 +521,7 @@ def heatmap():
 
 
 @app.route("/api/suggest", methods=["POST"])
+@require_role()  # any authenticated role
 def suggest_queries():
     """Return suggested follow-up queries based on context"""
     body = request.get_json(force=True)
@@ -469,13 +568,16 @@ def suggest_queries():
     })
 
 
-@app.route("/api/export-pdf", methods=["POST"])
+@app.route("/api/export-pdf", methods=["POST", "OPTIONS"])
+@require_role("Admin", "SP", "Inspector")  # Analysts excluded: no official report generation
 def export_pdf():
     """
     Export conversation history as a base64-encoded minimal HTML report.
     Full PDF generation happens client-side using jsPDF.
     This endpoint validates and formats the data.
     """
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
     try:
         body = request.get_json(force=True)
         conversation = body.get("conversation", [])
@@ -513,6 +615,7 @@ def export_pdf():
 
 
 @app.route("/api/reset-context", methods=["POST", "OPTIONS"])
+@require_role()  # any authenticated role
 def reset_context():
     """Explicitly clear the stored conversation context for a session
     (called by the frontend when the user starts a 'New Chat')."""
@@ -531,9 +634,12 @@ def reset_context():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@app.route("/api/init-db", methods=["POST"])
+@app.route("/api/init-db", methods=["POST", "OPTIONS"])
+@require_role("Admin")  # destructive op: Admin-only
 def init_db():
     """Initialize / re-seed the synthetic database"""
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
     try:
         if os.path.exists(DB_PATH):
             os.remove(DB_PATH)

@@ -15,8 +15,40 @@
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
+  <!-- ── LOGIN SCREEN (Role-Based Secure Access) ───────────────────────── -->
+  <div id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <div class="login-logo">
+        <span class="logo-icon">🚔</span>
+        <div>
+          <div class="logo-title">KRIME AI</div>
+          <div class="logo-subtitle">Karnataka State Police · SCRB · Datathon 2026</div>
+        </div>
+      </div>
+      <h2>Secure Sign In</h2>
+      <p class="login-subtitle">Role-based access · Admin, SP, Inspector &amp; Analyst</p>
+      <form id="loginForm" onsubmit="return handleLogin(event)">
+        <label for="loginUsername">Username</label>
+        <input type="text" id="loginUsername" autocomplete="username" placeholder="e.g. inspector1" required />
+        <label for="loginPassword">Password</label>
+        <input type="password" id="loginPassword" autocomplete="current-password" placeholder="••••••••" required />
+        <div id="loginError" class="login-error"></div>
+        <button type="submit" class="send-btn login-submit" id="loginSubmitBtn"><span>Sign In</span> ➤</button>
+      </form>
+      <div class="login-demo-accounts">
+        <div class="login-demo-title">Demo accounts (hackathon judges)</div>
+        <table>
+          <tr><td>Admin</td><td><code>admin</code> / <code>Admin@123</code></td></tr>
+          <tr><td>SP</td><td><code>sp.blru</code> / <code>Sp@12345</code></td></tr>
+          <tr><td>Inspector</td><td><code>inspector1</code> / <code>Inspector@123</code></td></tr>
+          <tr><td>Analyst</td><td><code>analyst1</code> / <code>Analyst@123</code></td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- ── HEADER ──────────────────────────────────────────────────────────── -->
-  <header class="app-header">
+  <header class="app-header" id="appHeader" style="display:none">
     <div class="header-left">
       <div class="logo">
         <span class="logo-icon">🚔</span>
@@ -32,13 +64,15 @@
       </div>
       <div class="user-info">
         <span class="user-avatar">👮</span>
-        <span id="userRole">SP - Bengaluru Urban</span>
+        <span id="userRole">—</span>
+        <span class="role-chip" id="userRoleChip">—</span>
+        <button class="icon-btn" onclick="handleLogout()" title="Sign out">🚪</button>
       </div>
     </div>
   </header>
 
   <!-- ── MAIN LAYOUT ─────────────────────────────────────────────────────── -->
-  <div class="app-layout">
+  <div class="app-layout" id="appLayout" style="display:none">
 
     <!-- Sidebar -->
     <aside class="sidebar">
@@ -55,7 +89,7 @@
         <button class="nav-btn" onclick="showTab('heatmap')" title="Heatmap">
           🗺️ <span>Heatmap</span>
         </button>
-        <button class="nav-btn" onclick="showTab('network')" title="Network">
+        <button class="nav-btn" onclick="showTab('network')" title="Network" data-roles="Admin,SP,Inspector">
           🕸️ <span>Network</span>
         </button>
         <button class="nav-btn" onclick="showTab('documents')" title="Documents">
@@ -66,8 +100,8 @@
         </button>
       </nav>
       <div class="sidebar-footer">
-        <button class="btn-outline" onclick="exportPDF()">📄 Export PDF</button>
-        <button class="btn-outline" onclick="initDb()">🔄 Reload DB</button>
+        <button class="btn-outline" onclick="exportPDF()" data-roles="Admin,SP,Inspector">📄 Export PDF</button>
+        <button class="btn-outline" onclick="initDb()" data-roles="Admin">🔄 Reload DB</button>
       </div>
     </aside>
 
@@ -84,8 +118,9 @@
                 <button class="lang-btn" id="btn-kn" onclick="setLang('kn')">🇮🇳 ಕನ್ನಡ</button>
               </div>
               <div class="chat-actions">
+                <button class="icon-btn active" id="voiceOutputBtn" onclick="toggleVoiceOutput()" title="Voice replies: ON (click to mute)">🔊</button>
                 <button class="icon-btn" onclick="clearChat()" title="Clear Chat">🗑️</button>
-                <button class="icon-btn" onclick="exportPDF()" title="Export PDF">📄</button>
+                <button class="icon-btn" onclick="exportPDF()" title="Export PDF" data-roles="Admin,SP,Inspector">📄</button>
               </div>
             </div>
 
@@ -255,7 +290,7 @@
         </div>
 
         <!-- Anomaly Detection Box (Catalyst QuickML AutoML pipeline) -->
-        <div class="prediction-box anomaly-box">
+        <div class="prediction-box anomaly-box" data-roles="Admin,SP,Inspector">
           <div class="anomaly-box-header">
             <h3>🚨 AI Anomaly Detection · Crime Hotspots (QuickML)</h3>
             <button class="send-btn" onclick="runAnomalyScan()">Scan Stations</button>

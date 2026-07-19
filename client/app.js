@@ -36,12 +36,108 @@ let networkInstance = null;
 let currentTabId = "chat";
 let dbCharts = {};           // chart.js instances keyed by canvas id
 let sessionId = "session_" + Date.now();
+let voiceOutputEnabled = true; // text-to-speech for AI responses
+
+// ── AUTH / ROLE-BASED SECURE ACCESS ────────────────────────────────────────
+let authToken = sessionStorage.getItem("krimeai_token") || null;
+let currentUser = null; // { username, role, full_name, badge_number }
+
+function authHeaders(extra) {
+  const h = Object.assign({ "Content-Type": "text/plain;charset=utf-8" }, extra || {});
+  if (authToken) h["Authorization"] = `Bearer ${authToken}`;
+  return h;
+}
+
+async function handleLogin(evt) {
+  evt.preventDefault();
+  const username = document.getElementById("loginUsername").value.trim();
+  const password = document.getElementById("loginPassword").value;
+  const errEl = document.getElementById("loginError");
+  const btn = document.getElementById("loginSubmitBtn");
+  errEl.textContent = "";
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (data.success) {
+      authToken = data.token;
+      currentUser = data.user;
+      sessionStorage.setItem("krimeai_token", authToken);
+      sessionStorage.setItem("krimeai_user", JSON.stringify(currentUser));
+      enterApp();
+    } else {
+      errEl.textContent = data.error || "Login failed";
+    }
+  } catch (e) {
+    errEl.textContent = "Network error: " + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+  return false;
+}
+
+async function handleLogout() {
+  try {
+    await fetch(`${API_BASE}/api/auth/logout`, { method: "POST", headers: authHeaders() });
+  } catch (_) {}
+  authToken = null;
+  currentUser = null;
+  sessionStorage.removeItem("krimeai_token");
+  sessionStorage.removeItem("krimeai_user");
+  document.getElementById("loginScreen").style.display = "flex";
+  document.getElementById("appHeader").style.display = "none";
+  document.getElementById("appLayout").style.display = "none";
+  document.getElementById("loginUsername").value = "";
+  document.getElementById("loginPassword").value = "";
+}
+
+function applyRoleGating() {
+  if (!currentUser) return;
+  document.querySelectorAll("[data-roles]").forEach(el => {
+    const allowed = el.getAttribute("data-roles").split(",").map(r => r.trim());
+    el.style.display = allowed.includes(currentUser.role) ? "" : "none";
+  });
+}
+
+function enterApp() {
+  document.getElementById("loginScreen").style.display = "none";
+  document.getElementById("appHeader").style.display = "flex";
+  document.getElementById("appLayout").style.display = "flex";
+  document.getElementById("userRole").textContent = currentUser.full_name || currentUser.username;
+  document.getElementById("userRoleChip").textContent = currentUser.role;
+  applyRoleGating();
+
+  renderSuggestions(DEFAULT_SUGGESTIONS);
+  ensureDbReady();
+  setupVoice();
+}
 
 // ── Init ──────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {
-  renderSuggestions(DEFAULT_SUGGESTIONS);
-  await ensureDbReady();
-  setupVoice();
+  const savedUser = sessionStorage.getItem("krimeai_user");
+  if (authToken && savedUser) {
+    try {
+      currentUser = JSON.parse(savedUser);
+      // Verify token is still valid server-side
+      const res = await fetch(`${API_BASE}/api/auth/me`, { headers: authHeaders() });
+      const data = await res.json();
+      if (data.success) {
+        currentUser = data.user;
+        enterApp();
+        return;
+      }
+    } catch (_) { /* fall through to login screen */ }
+  }
+  // Not authenticated (or session expired) — show login screen
+  authToken = null;
+  currentUser = null;
+  sessionStorage.removeItem("krimeai_token");
+  sessionStorage.removeItem("krimeai_user");
 });
 
 async function ensureDbReady() {
@@ -50,14 +146,7 @@ async function ensureDbReady() {
     if (!res.ok) throw new Error("Backend not ready");
     showToast("✅ KRIME AI connected");
   } catch (e) {
-    // Try to init DB
-    showToast("⚙️ Initializing database…");
-    try {
-      await fetch(`${API_BASE}/api/init-db`, { method: "POST" });
-      showToast("✅ Database initialized");
-    } catch (err) {
-      showToast("⚠️ Could not connect to backend");
-    }
+    showToast("⚠️ Could not connect to backend");
   }
 }
 
@@ -97,7 +186,7 @@ async function askRagQuestion(presetQuestion) {
   try {
     const res = await fetch(`${API_BASE}/api/rag-query`, {
       method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      headers: authHeaders(),
       body: JSON.stringify({ query: question })
     });
     const data = await res.json();
@@ -141,7 +230,7 @@ async function runAnomalyScan() {
   resultsEl.innerHTML = `<div class="rag-loading">🔍 Scanning all police stations via QuickML model…</div>`;
 
   try {
-    const res = await fetch(`${API_BASE}/api/anomaly-scan`, { method: "GET" });
+    const res = await fetch(`${API_BASE}/api/anomaly-scan`, { method: "GET", headers: authHeaders() });
     const data = await res.json();
 
     if (!data.success) {
@@ -240,7 +329,7 @@ async function sendMessage() {
   try {
     const res = await fetch(`${API_BASE}/api/chat`, {
       method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      headers: authHeaders(),
       body: JSON.stringify({ query, language: currentLang, session_id: sessionId })
     });
     const data = await res.json();
@@ -250,6 +339,7 @@ async function sendMessage() {
       const ts = new Date().toLocaleTimeString();
       addMessageBubble("assistant", data.response, ts, data.sql);
       conversation.push({ role: "assistant", content: data.response, timestamp: ts });
+      speakText(data.response);
 
       // Render chart if data available
       if (data.data && data.data.length > 0 && data.chart_type !== "number") {
@@ -270,6 +360,9 @@ async function sendMessage() {
 
       // Update suggestions
       fetchSuggestions(data.intents[0]);
+    } else if (data.code === "AUTH_REQUIRED") {
+      showToast("⚠️ Session expired. Please sign in again.");
+      handleLogout();
     } else {
       addMessageBubble("assistant", `❌ Error: ${data.error}`, new Date().toLocaleTimeString());
     }
@@ -351,7 +444,7 @@ function clearChat() {
   // into the new chat.
   fetch(`${API_BASE}/api/reset-context`, {
     method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    headers: authHeaders(),
     body: JSON.stringify({ session_id: sessionId })
   }).catch(() => {});
   sessionId = "session_" + Date.now();
@@ -361,7 +454,7 @@ async function fetchSuggestions(lastIntent) {
   try {
     const res = await fetch(`${API_BASE}/api/suggest`, {
       method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      headers: authHeaders(),
       body: JSON.stringify({ last_intent: lastIntent })
     });
     const data = await res.json();
@@ -547,7 +640,7 @@ function toggleChartPanel() {
 async function loadDashboard() {
   try {
     // KPIs
-    const res = await fetch(`${API_BASE}/api/dashboard`);
+    const res = await fetch(`${API_BASE}/api/dashboard`, { headers: authHeaders() });
     const { data } = await res.json();
     document.getElementById("kpi-total").textContent = (data.total_cases || 0).toLocaleString();
     document.getElementById("kpi-pending").textContent = (data.pending_cases || 0).toLocaleString();
@@ -576,7 +669,7 @@ async function loadDashChart(canvasId, chartId, defaultType) {
   try {
     const res = await fetch(`${API_BASE}/api/chart-data`, {
       method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      headers: authHeaders(),
       body: JSON.stringify({ chart_id: chartId })
     });
     const d = await res.json();
@@ -682,7 +775,7 @@ async function loadPredictive() {
   try {
     const res = await fetch(`${API_BASE}/api/chat`, {
       method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      headers: authHeaders(),
       body: JSON.stringify({ query: "predict crime trend next months early warning", language: "en", session_id: sessionId })
     });
     const d = await res.json();
@@ -707,7 +800,7 @@ async function loadHeatmap() {
     if (year) params.push(`year=${year}`);
     if (params.length) url += "?" + params.join("&");
 
-    const res = await fetch(url);
+    const res = await fetch(url, { headers: authHeaders() });
     const d = await res.json();
 
     if (d.success) renderHeatmapCanvas(d.points, crimeType, year);
@@ -805,7 +898,7 @@ function renderHeatmapCanvas(points, crimeType, year) {
 // ── NETWORK ───────────────────────────────────────────────────────────────
 async function loadNetwork() {
   try {
-    const res = await fetch(`${API_BASE}/api/network`);
+    const res = await fetch(`${API_BASE}/api/network`, { headers: authHeaders() });
     const d = await res.json();
 
     if (!d.success || !d.nodes?.length) {
@@ -911,12 +1004,12 @@ async function exportPDF() {
   try {
     const res = await fetch(`${API_BASE}/api/export-pdf`, {
       method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      headers: authHeaders(),
       body: JSON.stringify({
         conversation,
         title: "KRIME AI Investigation Report",
-        officer: "Investigating Officer",
-        badge: "KA-" + Math.floor(Math.random() * 90000 + 10000)
+        officer: (currentUser && currentUser.full_name) || "Investigating Officer",
+        badge: (currentUser && currentUser.badge_number) || ("KA-" + Math.floor(Math.random() * 90000 + 10000))
       })
     });
     const d = await res.json();
@@ -1032,6 +1125,8 @@ function toggleVoice() {
     document.getElementById("voiceBtn").classList.remove("recording");
     document.getElementById("voiceStatus").textContent = "";
   } else {
+    // Stop any AI speech currently playing so it doesn't overlap the mic
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
     mediaRecognition.lang = currentLang === "kn" ? "kn-IN" : "en-IN";
     mediaRecognition.start();
     isRecording = true;
@@ -1040,11 +1135,41 @@ function toggleVoice() {
   }
 }
 
+// ── VOICE OUTPUT (Text-to-Speech) ──────────────────────────────────────────
+function toggleVoiceOutput() {
+  voiceOutputEnabled = !voiceOutputEnabled;
+  const btn = document.getElementById("voiceOutputBtn");
+  if (btn) {
+    btn.classList.toggle("active", voiceOutputEnabled);
+    btn.title = voiceOutputEnabled ? "Voice replies: ON (click to mute)" : "Voice replies: OFF (click to unmute)";
+    btn.textContent = voiceOutputEnabled ? "🔊" : "🔇";
+  }
+  if (!voiceOutputEnabled && "speechSynthesis" in window) window.speechSynthesis.cancel();
+}
+
+function speakText(markdownText) {
+  if (!voiceOutputEnabled || !("speechSynthesis" in window) || !markdownText) return;
+  try {
+    // Strip markdown/formatting so speech doesn't read out symbols
+    const plain = markdownText
+      .replace(/[#*_`>]+/g, "")
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      .replace(/\n+/g, ". ")
+      .trim();
+    if (!plain) return;
+    window.speechSynthesis.cancel(); // don't overlap with previous utterance
+    const utterance = new SpeechSynthesisUtterance(plain.substring(0, 600));
+    utterance.lang = currentLang === "kn" ? "kn-IN" : "en-IN";
+    utterance.rate = 1.0;
+    window.speechSynthesis.speak(utterance);
+  } catch (_) { /* speech synthesis is best-effort */ }
+}
+
 // ── DB Init ───────────────────────────────────────────────────────────────
 async function initDb() {
   showLoading("Reinitializing database with synthetic data…");
   try {
-    const res = await fetch(`${API_BASE}/api/init-db`, { method: "POST" });
+    const res = await fetch(`${API_BASE}/api/init-db`, { method: "POST", headers: authHeaders() });
     const d = await res.json();
     showToast(d.success ? "✅ " + d.message : "❌ " + d.error);
   } catch (e) {

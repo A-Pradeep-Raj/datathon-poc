@@ -80,6 +80,75 @@ html, body {
 
 .user-info { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 13px; }
 .user-avatar { font-size: 20px; }
+.role-chip {
+  background: rgba(26, 115, 232, 0.15);
+  border: 1px solid rgba(26, 115, 232, 0.35);
+  color: var(--primary);
+  padding: 2px 9px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+/* ── LOGIN SCREEN ───────────────────────────────────────────────────────── */
+.login-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 30% 20%, #142033 0%, #0d1117 60%);
+  padding: 20px;
+}
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 28px 26px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.login-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.login-card h2 { font-size: 18px; margin-bottom: 4px; }
+.login-subtitle { font-size: 12px; color: var(--text-secondary); margin-bottom: 18px; }
+#loginForm label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 10px 0 4px;
+}
+#loginForm input {
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 13px;
+}
+#loginForm input:focus { outline: none; border-color: var(--primary); }
+.login-error {
+  min-height: 16px;
+  font-size: 12px;
+  color: var(--danger);
+  margin-top: 8px;
+}
+.login-submit { width: 100%; justify-content: center; margin-top: 6px; padding: 10px; }
+.login-demo-accounts {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.login-demo-title { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.4px; }
+.login-demo-accounts table { width: 100%; font-size: 12px; color: var(--text-secondary); border-collapse: collapse; }
+.login-demo-accounts td { padding: 3px 0; }
+.login-demo-accounts td:first-child { font-weight: 600; color: var(--text-primary); width: 70px; }
+.login-demo-accounts code { background: var(--bg-input); padding: 1px 5px; border-radius: 4px; color: var(--accent); }
 
 /* ── LAYOUT ─────────────────────────────────────────────────────────────── */
 .app-layout {
@@ -147,6 +216,7 @@ html, body {
   transition: all 0.2s;
 }
 .icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.icon-btn.active { color: var(--primary); }
 
 /* ── CHAT ───────────────────────────────────────────────────────────────── */
 .chat-layout {

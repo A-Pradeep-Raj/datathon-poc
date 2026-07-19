@@ -1,3 +1,11 @@
+To give context this project is for a Hackathon poc with following guidelines
+
+Problem Statement
+The State Crime Records Bureau (SCRB) manages a large and continuously expanding repository of crime-related data from 1100+ police stations across Karnataka. Current systems rely on static dashboards and manual queries, limiting deep analysis and real-time insights.
+
+The Challenge
+Build an intelligent conversational AI platform enabling investigators to query crime data using natural language and uncover patterns, relationships, and predictive insights.
+
 Solution
 
 It should enable users to discover hidden relationships between crimes, offenders, victims, locations, and socio-economic patterns, support investigative decision making, and provide predictive and preventive insights to strengthen proactive law enforcement.
@@ -25,19 +33,19 @@ From technology perspective deploy front-end using Catalyst Slate and backend us
 (which supports Spring Boot or Flask), use Catalyst’s in-house AI service, QuickML (which provides GLM 4.7 and Qwen 3.6), 
 Retrieval-Augmented Generation (RAG) for document querying, and custom pipeline builders for anomaly or fraud detection models.
 
-Staus : 18 July
+Staus : 19 July
 • Natural language chatbot (English + Kannada) --> Implemented
-• Voice-enabled interaction --> Need to check and confirm it with agent
+• Voice-enabled interaction --> Implemented (speech-to-text input + text-to-speech output)
 • Context-aware conversations --> Implemented
-• PDF export of conversation history --> Implemented
-• Criminal network visualization --> Implemented
+• PDF export of conversation history --> Implemented (role-gated: Admin/SP/Inspector)
+• Criminal network visualization --> Implemented (role-gated: Admin/SP/Inspector)
 • Crime trend & hotspot detection--> Implemented
 • Predictive analytics & early warnings --> Partial
 • Explainable AI with audit trails --> Implemented
-• Role-based secure access --> --> Need to check and confirm it with agent
+• Role-based secure access --> Implemented (Admin / SP / Inspector / Analyst roles, login screen + backend enforcement)
 
-
+Zoho Console URL: https://console.catalyst.zoho.in/baas/60078097690/index#/
 
 Zoho App URL: https://krime-ai-60078097690.development.catalystserverless.in/app/index.html
 
-https://meet.google.com/mft-hrzp-mwo
+
