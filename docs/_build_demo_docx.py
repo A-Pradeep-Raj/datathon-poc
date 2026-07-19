@@ -148,19 +148,19 @@ def add_divider():
 add_title_page()
 
 # ══════════════════════════ DEMO FLOW TABLE ══════════════════════════
-add_heading("⏱ Suggested Demo Flow (8–10 minutes)", level=1)
+add_heading("⏱ Suggested Demo Flow", level=1)
 add_table(
-    ["#", "Feature", "Time"],
+    ["#", "Feature"],
     [
-        ["1", "Secure Sign-In / Role-Based Access", "1 min"],
-        ["2", "Conversational AI Chat (NL→SQL + Context)", "2 min"],
-        ["3", "Dashboard & KPIs", "1 min"],
-        ["4", "Predictive Analytics + AI Anomaly Detection", "1.5 min"],
-        ["5", "Crime Heatmap", "0.5 min"],
-        ["6", "Criminal Network Visualization", "1 min"],
-        ["7", "Document Intelligence (RAG)", "1 min"],
-        ["8", "Audit Trail / Explainability", "0.5 min"],
-        ["9", "Voice Interaction + Role Restriction Demo", "1 min"],
+        ["1", "Secure Sign-In / Role-Based Access"],
+        ["2", "Conversational AI Chat (NL→SQL + Context)"],
+        ["3", "Dashboard & KPIs"],
+        ["4", "Predictive Analytics + AI Anomaly Detection"],
+        ["5", "Crime Heatmap"],
+        ["6", "Criminal Network Visualization"],
+        ["7", "Document Intelligence (RAG)"],
+        ["8", "Audit Trail / Explainability"],
+        ["9", "Voice Interaction + Role Restriction Demo"],
     ],
 )
 
