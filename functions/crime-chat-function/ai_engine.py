@@ -288,6 +288,135 @@ _ENGLISH_TO_KANNADA_PHRASES = [
     ("Stolen Property Analysis", "ಕಳ್ಳತನ ಆಸ್ತಿ ವಿಶ್ಲೇಷಣೆ"),
     ("loss and recovery summary", "ನಷ್ಟ ಮತ್ತು ವಸೂಲಿ ಸಾರಾಂಶ"),
     ("Property loss and recovery summary", "ಆಸ್ತಿ ನಷ್ಟ ಮತ್ತು ವಸೂಲಿ ಸಾರಾಂಶ"),
+    ("Cases with severity score ≥ 8, most severe first", "ತೀವ್ರತೆ ಅಂಕ ≥ 8 ಇರುವ ಪ್ರಕರಣಗಳು, ಅತಿ ತೀವ್ರವಾದವು ಮೊದಲು"),
+
+    # --- Markdown table column headers (see _build_markdown_table calls
+    # and the key.replace("_"," ").title() dynamic-column builders) ---
+    ("District Name", "ಜಿಲ್ಲೆಯ ಹೆಸರು"),
+    ("Crime Type", "ಅಪರಾಧ ಪ್ರಕಾರ"),
+    ("Year", "ವರ್ಷ"),
+    ("Station", "ಠಾಣೆ"),
+    ("Avg Severity", "ಸರಾಸರಿ ತೀವ್ರತೆ"),
+    ("Avg Age", "ಸರಾಸರಿ ವಯಸ್ಸು"),
+    ("Age Group", "ವಯೋಗುಂಪು"),
+    ("Gender", "ಲಿಂಗ"),
+    ("Victims", "ಬಲಿಪಶುಗಳು"),
+    ("FIR Number", "FIR ಸಂಖ್ಯೆ"),
+    ("Date", "ದಿನಾಂಕ"),
+    ("Severity", "ತೀವ್ರತೆ"),
+    ("Status", "ಸ್ಥಿತಿ"),
+    ("Rank", "ಶ್ರೇಣಿ"),
+    ("Cases Handled", "ನಿರ್ವಹಿಸಿದ ಪ್ರಕರಣಗಳು"),
+    ("Gang Affiliation", "ಗ್ಯಾಂಗ್ ಸಂಬಂಧ"),
+    ("Gang", "ಗ್ಯಾಂಗ್"),
+    ("Crime Types", "ಅಪರಾಧ ಪ್ರಕಾರಗಳು"),
+    ("Property Type", "ಆಸ್ತಿ ಪ್ರಕಾರ"),
+    ("Items Stolen", "ಕಳ್ಳತನವಾದ ವಸ್ತುಗಳು"),
+    ("Value", "ಮೌಲ್ಯ"),
+    ("Recovered", "ವಸೂಲಿಯಾದ"),
+    ("Name", "ಹೆಸರು"),
+    ("Age", "ವಯಸ್ಸು"),
+    ("Occupation", "ಉದ್ಯೋಗ"),
+    ("Criminal History", "ಅಪರಾಧ ಇತಿಹಾಸ"),
+    ("Arrest Status", "ಬಂಧನ ಸ್ಥಿತಿ"),
+    ("Arrest Date", "ಬಂಧನ ದಿನಾಂಕ"),
+    ("Prior Cases", "ಹಿಂದಿನ ಪ್ರಕರಣಗಳು"),
+    ("Member Count", "ಸದಸ್ಯರ ಸಂಖ್ಯೆ"),
+    ("Cases Involved", "ಒಳಗೊಂಡ ಪ್ರಕರಣಗಳು"),
+    ("Count", "ಸಂಖ್ಯೆ"),
+    ("Alias", "ಇತರ ಹೆಸರು"),
+    ("Address", "ವಿಳಾಸ"),
+    ("Contact Number", "ಸಂಪರ್ಕ ಸಂಖ್ಯೆ"),
+    ("Aadhaar Number", "ಆಧಾರ್ ಸಂಖ್ಯೆ"),
+    ("Nationality", "ರಾಷ್ಟ್ರೀಯತೆ"),
+
+    # --- Crime type values (CRIME_TYPES in synthetic_data.py) -- these
+    # appear as literal cell values in almost every table/count response,
+    # so translating them (rather than just the column header) is what
+    # makes the biggest visible difference for "still shows English" -- ---
+    ("Attempt to Murder", "ಕೊಲೆ ಯತ್ನ"),
+    ("Murder", "ಕೊಲೆ"),
+    ("Robbery", "ದರೋಡೆ"),
+    ("Dacoity", "ಡಕಾಯಿತಿ"),
+    ("Theft", "ಕಳ್ಳತನ"),
+    ("Burglary", "ಮನೆಗಳ್ಳತನ"),
+    ("Vehicle Theft", "ವಾಹನ ಕಳ್ಳತನ"),
+    ("Kidnapping", "ಅಪಹರಣ"),
+    ("Sexual Assault", "ಲೈಂಗಿಕ ದೌರ್ಜನ್ಯ"),
+    ("Rape", "ಅತ್ಯಾಚಾರ"),
+    ("Dowry Death", "ವರದಕ್ಷಿಣೆ ಸಾವು"),
+    ("Domestic Violence", "ಕೌಟುಂಬಿಕ ದೌರ್ಜನ್ಯ"),
+    ("Cheating", "ವಂಚನೆ"),
+    ("Forgery", "ನಕಲಿ ದಾಖಲೆ"),
+    ("Cybercrime", "ಸೈಬರ್ ಅಪರಾಧ"),
+    ("Drug Trafficking", "ಮಾದಕ ದ್ರವ್ಯ ಸಾಗಣೆ"),
+    ("Arms Act Violation", "ಶಸ್ತ್ರಾಸ್ತ್ರ ಕಾಯ್ದೆ ಉಲ್ಲಂಘನೆ"),
+    ("Rioting", "ಗಲಭೆ"),
+    ("Arson", "ಬೆಂಕಿ ಹಚ್ಚುವಿಕೆ"),
+    ("Hit and Run", "ಡಿಕ್ಕಿ ಹೊಡೆದು ಪರಾರಿ"),
+
+    # --- Officer rank values (OFFICER_RANKS in synthetic_data.py) ---
+    ("Deputy Superintendent", "ಉಪ ಅಧೀಕ್ಷಕ"),
+    ("Circle Inspector", "ವೃತ್ತ ಇನ್ಸ್‌ಪೆಕ್ಟರ್"),
+    ("Sub Inspector", "ಸಬ್ ಇನ್ಸ್‌ಪೆಕ್ಟರ್"),
+    ("Head Constable", "ಹೆಡ್ ಕಾನ್ಸ್ಟೇಬಲ್"),
+    ("Inspector", "ಇನ್ಸ್‌ಪೆಕ್ಟರ್"),
+    ("Constable", "ಕಾನ್ಸ್ಟೇಬಲ್"),
+    ("ASI", "ಎಎಸ್ಐ"),
+
+    # --- Gang affiliation values (assigned in synthetic_data.py) ---
+    ("Organized Gang", "ಸಂಘಟಿತ ಗ್ಯಾಂಗ್"),
+    ("Rowdy Sheeter", "ರೌಡಿ ಶೀಟರ್"),
+    ("Known Criminal", "ಪರಿಚಿತ ಅಪರಾಧಿ"),
+
+    # --- Stolen-property type values (assigned in synthetic_data.py /
+    # extract_property_type()) ---
+    ("Mobile Phone", "ಮೊಬೈಲ್ ಫೋನ್"),
+    ("Jewellery", "ಆಭರಣ"),
+    ("Electronics", "ಎಲೆಕ್ಟ್ರಾನಿಕ್ಸ್"),
+    ("Documents", "ದಾಖಲೆಗಳು"),
+    ("Vehicle", "ವಾಹನ"),
+    ("Cash", "ನಗದು"),
+
+    # --- Data values that appear inside table cells / bolded status text
+    # (fir_cases.status, accused.arrest_status, victims.gender, and the
+    # literal age-group labels built in the victim_stats SQL CASE) ---
+    ("Pending Investigation", "ತನಿಖೆ ಬಾಕಿ"),
+    ("Under Investigation", "ತನಿಖೆಯಲ್ಲಿ"),
+    ("Chargesheet Filed", "ಚಾರ್ಜ್‌ಶೀಟ್ ಸಲ್ಲಿಸಲಾಗಿದೆ"),
+    ("Trial in Progress", "ವಿಚಾರಣೆ ನಡೆಯುತ್ತಿದೆ"),
+    ("Convicted", "ಶಿಕ್ಷೆಯಾಗಿದೆ"),
+    ("Acquitted", "ಬಿಡುಗಡೆಯಾಗಿದೆ"),
+    ("Case Closed", "ಪ್ರಕರಣ ಮುಕ್ತಾಯ"),
+    ("Absconding", "ತಲೆಮರೆಸಿಕೊಂಡಿರುವ"),
+    ("Arrested", "ಬಂಧಿತ"),
+    ("Wanted", "ವಾಂಟೆಡ್"),
+    ("Male", "ಪುರುಷ"),
+    ("Female", "ಮಹಿಳೆ"),
+    ("Minor (<18)", "ಮಕ್ಕಳು (18ಕ್ಕಿಂತ ಕಡಿಮೆ)"),
+    ("Youth (18-29)", "ಯುವಕರು (18-29)"),
+    ("Adult (30-49)", "ವಯಸ್ಕರು (30-49)"),
+    ("Senior (50+)", "ಹಿರಿಯರು (50+)"),
+
+    # --- Victim-count subject phrases (see _extract_victim_filter) ---
+    ("minor/child victims (under 18)", "18 ವರ್ಷದೊಳಗಿನ ಮಕ್ಕಳ ಬಲಿಪಶುಗಳು"),
+    ("female victims", "ಮಹಿಳಾ ಬಲಿಪಶುಗಳು"),
+    ("male victims", "ಪುರುಷ ಬಲಿಪಶುಗಳು"),
+    ("victims", "ಬಲಿಪಶುಗಳು"),
+
+    # --- Connector words/phrases used to assemble count-style sentences
+    # (see _build_count_response) -- these are intentionally short/generic
+    # but are always applied AFTER all longer phrases above (translation
+    # sorts by descending phrase length), so they only ever affect
+    # leftover connective English words instead of fragmenting a longer
+    # phrase that was meant to be translated as a whole. ---
+    ("who are still", "ಇನ್ನೂ"),
+    ("with a recorded", "ದಾಖಲಾದ"),
+    ("with a", "ಹೊಂದಿರುವ"),
+    ("crime type", "ಅಪರಾಧ ಪ್ರಕಾರ"),
+    ("year", "ವರ್ಷ"),
+    ("of", "ದ"),
+    ("in", "ನಲ್ಲಿ"),
 ]
 
 
