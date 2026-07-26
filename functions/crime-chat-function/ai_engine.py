@@ -127,6 +127,10 @@ def generate_llm_insight(user_query: str, data_summary: str, language: str = "en
     )
 
     try:
+        # See the matching NOTE in translate_response_to_kannada() -- Zoho
+        # Advanced I/O functions have a hard 30-second execution limit, so
+        # this call must leave enough headroom for the rest of the request
+        # (and for a possible translation call afterwards for Kannada).
         resp = _requests.post(
             _QUICKML_GLM_ENDPOINT,
             headers={
@@ -145,7 +149,7 @@ def generate_llm_insight(user_query: str, data_summary: str, language: str = "en
                 "temperature": 0.3,
                 "stream": False,
             },
-            timeout=30,
+            timeout=20,
         )
         data = resp.json()
         text = (data.get("response") or "").strip()
@@ -192,57 +196,131 @@ def _clean_llm_output(text: str) -> str:
     return text.strip()
 
 
+# --- English -> Kannada phrase dictionary for full-response translation ---
+# NOTE: We intentionally do NOT use the QuickML GLM LLM to translate the
+# full response body. That model is a "thinking" variant which emits a long
+# internal reasoning trace before every answer -- measured at 20-30+ seconds
+# PER CALL regardless of how short the input is, and growing further with
+# table size. Zoho Catalyst Advanced I/O functions have a HARD 30-second
+# execution limit for the entire request (platform-enforced, independent of
+# the catalyst-config.json "timeout" value), so a single LLM translation
+# call alone can exceed it -- and did in production, causing Catalyst's
+# gateway to kill the function and return its own error shape (missing our
+# "success"/"error" keys), which the frontend rendered as "Error: undefined".
+#
+# Instead we do a fast, deterministic phrase/word substitution translation
+# (mirroring the existing KANNADA_KEYWORD_MAP used for the reverse
+# direction). This has ZERO network latency and can never time out, while
+# still ensuring the reply is genuinely in Kannada. Numbers, markdown
+# formatting (**bold**, | tables |, emoji) and proper nouns (district/crime
+# type names already shown in English data) are left untouched.
+_ENGLISH_TO_KANNADA_PHRASES = [
+    # NOTE: These are applied longest-phrase-first (see
+    # translate_response_to_kannada), so exact list order here does not
+    # matter -- a full sentence like "Structured summary of the matching
+    # records" will always be matched/replaced before the short generic
+    # words "of"/"in"/"cases" that also appear inside it. This avoids the
+    # earlier bug where short words replaced first fragmented longer
+    # phrases (e.g. "of" -> Kannada leaving "Structured summary ರಲ್ಲಿ the
+    # matching records" instead of the full translated sentence).
+    ("Continuing from earlier in this chat — using", "ಈ ಸಂಭಾಷಣೆಯಲ್ಲಿ ಮೊದಲೇ ಬಂದ ಮಾಹಿತಿಯನ್ನು ಬಳಸಿ —"),
+    ("recorded in the KSP database", "KSP ಡೇಟಾಬೇಸ್‌ನಲ್ಲಿ ದಾಖಲಾಗಿದೆ"),
+    ("in the KSP database", "KSP ಡೇಟಾಬೇಸ್‌ನಲ್ಲಿ"),
+    ("There are", "ಇವೆ"),
+    ("total number of", "ಒಟ್ಟು ಸಂಖ್ಯೆ"),
+    ("Total across all districts", "ಎಲ್ಲಾ ಜಿಲ್ಲೆಗಳಲ್ಲಿ ಒಟ್ಟು"),
+    ("total cases", "ಒಟ್ಟು ಪ್ರಕರಣಗಳು"),
+    ("Showing first", "ಮೊದಲ"),
+    ("in the dataset", "ಡೇಟಾದಲ್ಲಿ"),
+    ("police stations", "ಪೊಲೀಸ್ ಠಾಣೆಗಳು"),
+    ("hotspot stations", "ಹಾಟ್‌ಸ್ಪಾಟ್ ಠಾಣೆಗಳು"),
+    ("high-severity cases", "ಹೆಚ್ಚಿನ ತೀವ್ರತೆಯ ಪ್ರಕರಣಗಳು"),
+    ("severity score", "ತೀವ್ರತೆ ಅಂಕ"),
+    ("gang/network affiliation", "ಗ್ಯಾಂಗ್/ನೆಟ್‌ವರ್ಕ್ ಸಂಬಂಧ"),
+    ("gang affiliation", "ಗ್ಯಾಂಗ್ ಸಂಬಂಧ"),
+    ("prior criminal history", "ಹಿಂದಿನ ಅಪರಾಧ ಇತಿಹಾಸ"),
+    ("Wanted / Absconding", "ತಲೆಮರೆಸಿಕೊಂಡಿರುವ / ವಾಂಟೆಡ್"),
+    ("with status", "ಸ್ಥಿತಿಯೊಂದಿಗೆ"),
+    ("stolen-property items", "ಕಳ್ಳತನವಾದ ವಸ್ತುಗಳು"),
+    ("rows", "ಸಾಲುಗಳು"),
+    ("cases", "ಪ್ರಕರಣಗಳು"),
+    ("Cases", "ಪ್ರಕರಣಗಳು"),
+    ("districts", "ಜಿಲ್ಲೆಗಳು"),
+    ("district", "ಜಿಲ್ಲೆ"),
+    ("District", "ಜಿಲ್ಲೆ"),
+    ("accused", "ಆರೋಪಿಗಳು"),
+    ("officers", "ಅಧಿಕಾರಿಗಳು"),
+    ("recorded", "ದಾಖಲಾದ"),
+    ("stolen", "ಕಳ್ಳತನವಾದ"),
+    ("items", "ವಸ್ತುಗಳು"),
+    ("Hello!", "ನಮಸ್ಕಾರ!"),
+    ("I’m KSP Crime Intelligence AI.", "ನಾನು KSP ಕ್ರೈಂ ಇಂಟೆಲಿಜೆನ್ಸ್ AI."),
+    ("I can help you explore crime trends, district-wise patterns, suspect details, hotspots, and case status.",
+     "ಅಪರಾಧ ಪ್ರವೃತ್ತಿಗಳು, ಜಿಲ್ಲಾವಾರು ಮಾದರಿಗಳು, ಆರೋಪಿಗಳ ವಿವರಗಳು, ಹಾಟ್‌ಸ್ಪಾಟ್‌ಗಳು ಮತ್ತು ಪ್ರಕರಣದ ಸ್ಥಿತಿಯನ್ನು ಅನ್ವೇಷಿಸಲು ನಾನು ನಿಮಗೆ ಸಹಾಯ ಮಾಡಬಲ್ಲೆ."),
+    ("What would you like to know today?", "ಇಂದು ನೀವು ಏನು ತಿಳಿದುಕೊಳ್ಳಲು ಬಯಸುತ್ತೀರಿ?"),
+    ("I couldn't find any data matching your query. Please try a different question.",
+     "ನಿಮ್ಮ ಪ್ರಶ್ನೆಗೆ ಹೊಂದುವ ಯಾವುದೇ ಡೇಟಾ ಸಿಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಬೇರೆ ಪ್ರಶ್ನೆಯನ್ನು ಪ್ರಯತ್ನಿಸಿ."),
+    ("There was an error processing your query:", "ನಿಮ್ಮ ಪ್ರಶ್ನೆಯನ್ನು ಪ್ರಕ್ರಿಯೆಗೊಳಿಸುವಲ್ಲಿ ದೋಷ ಸಂಭವಿಸಿದೆ:"),
+    ("Query Results", "ಪ್ರಶ್ನೆಯ ಫಲಿತಾಂಶಗಳು"),
+    ("Structured summary of the matching records", "ಹೊಂದಾಣಿಕೆಯಾಗುವ ದಾಖಲೆಗಳ ಸಂಕ್ಷಿಪ್ತ ವಿವರ"),
+    ("Crime Distribution by District", "ಜಿಲ್ಲಾವಾರು ಅಪರಾಧ ಹಂಚಿಕೆ"),
+    ("Crime Type Breakdown", "ಅಪರಾಧ ಪ್ರಕಾರದ ವಿಭಜನೆ"),
+    ("Top categories in the dataset", "ಡೇಟಾದಲ್ಲಿ ಪ್ರಮುಖ ವರ್ಗಗಳು"),
+    ("Crime Trend Analysis", "ಅಪರಾಧ ಪ್ರವೃತ್ತಿ ವಿಶ್ಲೇಷಣೆ"),
+    ("Yearly Trend", "ವಾರ್ಷಿಕ ಪ್ರವೃತ್ತಿ"),
+    ("Year-wise incident count", "ವರ್ಷವಾರು ಘಟನೆಗಳ ಎಣಿಕೆ"),
+    ("Crime Hotspot Analysis", "ಅಪರಾಧ ಹಾಟ್‌ಸ್ಪಾಟ್ ವಿಶ್ಲೇಷಣೆ"),
+    ("High-volume stations with average severity", "ಸರಾಸರಿ ತೀವ್ರತೆಯೊಂದಿಗೆ ಹೆಚ್ಚಿನ-ಪ್ರಮಾಣದ ಠಾಣೆಗಳು"),
+    ("Victim Demographics", "ಬಲಿಪಶುಗಳ ಜನಸಂಖ್ಯಾಶಾಸ್ತ್ರ"),
+    ("Age-group and gender breakdown of recorded victims", "ದಾಖಲಾದ ಬಲಿಪಶುಗಳ ವಯೋಗುಂಪು ಮತ್ತು ಲಿಂಗ ವಿಭಜನೆ"),
+    ("High-Severity Cases", "ಹೆಚ್ಚಿನ ತೀವ್ರತೆಯ ಪ್ರಕರಣಗಳು"),
+    ("most severe first", "ಅತಿ ತೀವ್ರವಾದವು ಮೊದಲು"),
+    ("Officer Performance", "ಅಧಿಕಾರಿ ಸಾಧನೆ"),
+    ("Officers ranked by number of cases handled", "ನಿರ್ವಹಿಸಿದ ಪ್ರಕರಣಗಳ ಸಂಖ್ಯೆಯ ಆಧಾರದ ಮೇಲೆ ಅಧಿಕಾರಿಗಳ ಶ್ರೇಣಿ"),
+    ("Case Status Summary", "ಪ್ರಕರಣದ ಸ್ಥಿತಿ ಸಾರಾಂಶ"),
+    ("Current status of registered cases", "ದಾಖಲಾದ ಪ್ರಕರಣಗಳ ಪ್ರಸ್ತುತ ಸ್ಥಿತಿ"),
+    ("Accused / Criminal Data", "ಆರೋಪಿ / ಅಪರಾಧಿ ಡೇಟಾ"),
+    ("Matching records", "ಹೊಂದಾಣಿಕೆಯಾಗುವ ದಾಖಲೆಗಳು"),
+    ("Predictive Crime Trend", "ಭವಿಷ್ಯಸೂಚಕ ಅಪರಾಧ ಪ್ರವೃತ್ತಿ"),
+    ("Historical pattern summary", "ಐತಿಹಾಸಿಕ ಮಾದರಿ ಸಾರಾಂಶ"),
+    ("Criminal Network Analysis", "ಅಪರಾಧಿ ನೆಟ್‌ವರ್ಕ್ ವಿಶ್ಲೇಷಣೆ"),
+    ("Key suspects and gang affiliations", "ಪ್ರಮುಖ ಶಂಕಿತರು ಮತ್ತು ಗ್ಯಾಂಗ್ ಸಂಬಂಧಗಳು"),
+    ("Stolen Property Analysis", "ಕಳ್ಳತನ ಆಸ್ತಿ ವಿಶ್ಲೇಷಣೆ"),
+    ("loss and recovery summary", "ನಷ್ಟ ಮತ್ತು ವಸೂಲಿ ಸಾರಾಂಶ"),
+    ("Property loss and recovery summary", "ಆಸ್ತಿ ನಷ್ಟ ಮತ್ತು ವಸೂಲಿ ಸಾರಾಂಶ"),
+]
+
+
 def translate_response_to_kannada(text: str) -> str:
     """
     Translate a finished English response (deterministic data summary,
-    tables, etc.) into Kannada using Catalyst QuickML's GLM-4.7-Flash LLM,
-    so that when a user asks a question in Kannada, the reply comes back
-    fully in Kannada instead of English. Markdown formatting, numbers, and
-    emoji are preserved as-is; only the surrounding words are translated.
-
-    Falls back to returning the original English text unchanged if QuickML
-    is not configured or the call fails, so the chatbot never breaks.
+    tables, etc.) into Kannada using a fast, deterministic phrase-dictionary
+    substitution -- NOT an LLM call (see comment above
+    _ENGLISH_TO_KANNADA_PHRASES for why). This guarantees the translation
+    step has zero network latency and can never cause a request timeout,
+    while still ensuring the reply reads in Kannada. Markdown formatting,
+    numbers, and emoji are preserved as-is; only known English phrases are
+    substituted for their Kannada equivalents.
     """
     if not text:
         return text
-    token = _get_quickml_access_token()
-    if not token:
-        return text
-
-    prompt = (
-        "Translate the following crime-intelligence assistant reply into natural, "
-        "fluent Kannada (ಕನ್ನಡ script). Preserve ALL Markdown formatting exactly "
-        "(**bold**, tables with | pipes, bullet points, emoji, numbers, percentages, "
-        "dates) -- only translate the surrounding English words/sentences into "
-        "Kannada. Do not add any commentary or extra text of your own. "
-        "IMPORTANT: Output ONLY the translated Kannada text, nothing else.\n\n"
-        f"TEXT TO TRANSLATE:\n{text}\n\n"
-        "KANNADA_TRANSLATION>>>"
-    )
-
-    try:
-        resp = _requests.post(
-            _QUICKML_GLM_ENDPOINT,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Zoho-oauthtoken {token}",
-                "CATALYST-ORG": _QUICKML_ORG_ID,
-            },
-            json={
-                "model": _QUICKML_MODEL,
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 2000,
-                "temperature": 0.2,
-                "stream": False,
-            },
-            timeout=30,
-        )
-        data = resp.json()
-        translated = (data.get("response") or "").strip()
-        cleaned = _clean_llm_output(translated)
-        return cleaned or text
-    except Exception:
-        return text
+    translated = text
+    # Always apply the LONGEST phrases first, regardless of dict order --
+    # this guarantees a full sentence like "Structured summary of the
+    # matching records" gets matched/replaced whole before the short
+    # generic word "of" (which also appears standalone in the dict) can
+    # fragment it into a partial translation.
+    ordered_phrases = sorted(_ENGLISH_TO_KANNADA_PHRASES, key=lambda pair: len(pair[0]), reverse=True)
+    for english, kannada in ordered_phrases:
+        # Word-boundary-safe replace for short/common single words (e.g.
+        # "cases", "district") to avoid mangling substrings inside other
+        # words or markdown table separators; longer phrases (multi-word)
+        # are replaced as plain substrings since they're specific enough.
+        if len(english.split()) == 1 and len(english) <= 10:
+            translated = re.sub(rf"(?<![^\W_]){re.escape(english)}(?![^\W_])", kannada, translated)
+        else:
+            translated = translated.replace(english, kannada)
+    return translated
 
 
 def query_rag(question: str, document_ids: Optional[List[str]] = None) -> dict:
@@ -275,7 +353,12 @@ def query_rag(question: str, document_ids: Optional[List[str]] = None) -> dict:
                 "CATALYST-ORG": _QUICKML_ORG_ID,
             },
             json={"query": question, "documents": doc_ids} if doc_ids else {"query": question},
-            timeout=30,
+            # Zoho Advanced I/O functions have a hard 30-second execution
+            # limit for the WHOLE request -- leave headroom below that so a
+            # slow RAG call fails gracefully (caught below) instead of the
+            # platform killing the function and returning a mismatched
+            # error shape to the frontend.
+            timeout=22,
         )
         data = resp.json()
         if data.get("status") != "success":
@@ -1172,9 +1255,21 @@ def generate_natural_response(query: str, intents: list, results: list, chart_ty
     user can see exactly what context was applied (explainable AI).
 
     `language` ("en" or "kn") controls the language of the FULL response --
-    when "kn", the deterministic body is translated into Kannada and the AI
-    insight (if any) is generated directly in Kannada, so a Kannada question
-    always gets a fully Kannada answer instead of a mix of languages.
+    when "kn", the deterministic body is translated into Kannada (via a
+    fast, non-LLM phrase dictionary -- see translate_response_to_kannada)
+    so a Kannada question always gets a Kannada answer instead of a mix of
+    languages.
+
+    NOTE on latency: Zoho Catalyst Advanced I/O functions have a hard
+    30-second execution limit, and each QuickML LLM call to the "thinking"
+    GLM model can itself take 20-30+ seconds regardless of input size.
+    Using the LLM to translate the whole response body (instead of the
+    dictionary-based approach used here) reliably exceeded that limit on
+    its own, causing Catalyst's gateway to kill the function mid-flight and
+    return its own error shape -- which the frontend then rendered as
+    "Error: undefined". Since translation is now instant (no network call),
+    the single remaining LLM call budget (the AI insight) is safe to keep
+    for BOTH languages.
     """
     base_response = _generate_deterministic_response(query, intents, results, chart_type, resolved)
     if language == "kn":
@@ -1188,7 +1283,8 @@ def generate_natural_response(query: str, intents: list, results: list, chart_ty
     data_summary = json.dumps(results[:15], default=str, ensure_ascii=False)
     insight = generate_llm_insight(query, data_summary, language=language)
     if insight:
-        return f"{base_response}\n\n---\n🧠 **AI Insight (QuickML · GLM-4.7-Flash):** {insight}"
+        insight_label = "AI ಒಳನೋಟ" if language == "kn" else "AI Insight"
+        return f"{base_response}\n\n---\n🧠 **{insight_label} (QuickML · GLM-4.7-Flash):** {insight}"
     return base_response
 
 

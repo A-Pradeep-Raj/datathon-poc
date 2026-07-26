@@ -218,9 +218,12 @@ async function askRagQuestion(presetQuestion) {
         ${sourcesHtml ? `<div class="rag-sources"><div class="rag-sources-title">Sources:</div>${sourcesHtml}</div>` : ""}
       `;
     } else {
+      // Same defensive fallback as the Chat tab -- a killed/timed-out
+      // request may not carry our expected error shape at all.
+      const errMsg = data && data.error ? data.error : "Could not find an answer in the knowledge base.";
       entry.innerHTML = `
         <div class="rag-question">🧑‍💼 ${question}</div>
-        <div class="rag-answer rag-error">❌ ${data.error || "Could not find an answer in the knowledge base."}</div>
+        <div class="rag-answer rag-error">❌ ${errMsg}</div>
       `;
     }
   } catch (e) {
@@ -441,7 +444,12 @@ async function sendMessage() {
       showToast("⚠️ Session expired. Please sign in again.");
       handleLogout();
     } else {
-      addMessageBubble("assistant", `❌ Error: ${data.error}`, new Date().toLocaleTimeString());
+      // If the platform/gateway killed the request (e.g. a timeout) before
+      // our Flask app could respond, `data` may not match our expected
+      // shape at all, leaving data.error undefined -- show a friendly
+      // fallback message instead of literally rendering "undefined".
+      const errMsg = data && data.error ? data.error : "The request took too long or the server didn't respond as expected. Please try again.";
+      addMessageBubble("assistant", `❌ Error: ${errMsg}`, new Date().toLocaleTimeString());
     }
   } catch (err) {
     removeTyping(typingId);
