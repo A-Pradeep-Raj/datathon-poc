@@ -233,6 +233,24 @@ def create_database(db_path="ksp_crime.db"):
         result_json TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- Index strategy validated by tests/benchmark_performance.py's
+    -- EXPLAIN QUERY PLAN before/after comparison (see
+    -- docs/PERFORMANCE_BENCHMARK_REPORT.md): reduces full-table scans on
+    -- the app's actual query shapes (build_sql_query() in ai_engine.py)
+    -- from 11/11 benchmarked query types down to 4/11, with zero
+    -- application-code changes required.
+    CREATE INDEX IF NOT EXISTS idx_fir_station ON fir_cases(station_id);
+    CREATE INDEX IF NOT EXISTS idx_fir_crime_type ON fir_cases(crime_type);
+    CREATE INDEX IF NOT EXISTS idx_fir_date ON fir_cases(date_of_incident);
+    CREATE INDEX IF NOT EXISTS idx_fir_severity ON fir_cases(severity_score DESC);
+    CREATE INDEX IF NOT EXISTS idx_fir_status ON fir_cases(status);
+    CREATE INDEX IF NOT EXISTS idx_stations_district ON police_stations(district_id);
+    CREATE INDEX IF NOT EXISTS idx_accused_fir ON accused(fir_id);
+    CREATE INDEX IF NOT EXISTS idx_accused_status ON accused(arrest_status);
+    CREATE INDEX IF NOT EXISTS idx_accused_gang ON accused(gang_affiliation);
+    CREATE INDEX IF NOT EXISTS idx_victims_fir ON victims(fir_id);
+    CREATE INDEX IF NOT EXISTS idx_stolen_property_fir ON stolen_property(fir_id);
     """)
     conn.commit()
 

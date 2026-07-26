@@ -1,0 +1,5 @@
+# Extra dependency needed ONLY to run tests/benchmark_performance.py locally
+# (measures this benchmark process's own RSS memory usage). NOT part of the
+# deployed Catalyst function's requirements.txt -- the app itself does not
+# depend on psutil.
+psutil>=5.9

@@ -108,6 +108,8 @@ Full instructions (including Zoho Catalyst cloud deployment) are in [`DEPLOYMENT
 
 🎬 **Presenting to judges?** See the [**Demo Guide**](./docs/DEMO_GUIDE.md) for a step-by-step walkthrough script with screenshots of every feature.
 
+📈 **Want the numbers behind the claims?** See the [**Performance Benchmark Report**](./docs/PERFORMANCE_BENCHMARK_REPORT.md) — response-time percentiles, database query-plan/index analysis, real concurrency load testing, data-accuracy checks, and intent-detection accuracy, all reproducible via `tests/benchmark_performance.py`.
+
 ---
 
 ## 🔌 API Endpoints

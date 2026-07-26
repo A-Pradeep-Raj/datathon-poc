@@ -1,0 +1,382 @@
+{
+  "generated_at": "2026-07-26T15:46:17.422455",
+  "db_build_time_s": 0.45,
+  "response_rows": [
+    {
+      "label": "Simple Count Query",
+      "query": "how many total crimes are registered in Karnataka?",
+      "sql": "SELECT COUNT(*) as total_cases FROM fir_cases",
+      "p50": 0.1,
+      "p95": 0.2,
+      "p99": 0.4,
+      "mean": 0.1,
+      "min": 0.0,
+      "max": 0.5
+    },
+    {
+      "label": "District-Level Aggregation",
+      "query": "show crimes by district",
+      "sql": "SELECT d.district_name, COUNT(*) as case_count\n                 FROM fir_cases f\n                 JOIN police_stations ps ON f.station_id = ps.station_id\n                 JOIN districts d ON ps.district_id = d.district_id\n                 GROUP BY d.district_name\n                 ORDER BY case_count DESC LIMIT 20",
+      "p50": 0.3,
+      "p95": 0.6,
+      "p99": 0.8,
+      "mean": 0.4,
+      "min": 0.3,
+      "max": 1.0
+    },
+    {
+      "label": "Crime Type Breakdown",
+      "query": "breakdown of crimes by type",
+      "sql": "SELECT crime_type, COUNT(*) as case_count FROM fir_cases\n                     GROUP BY crime_type ORDER BY case_count DESC",
+      "p50": 0.1,
+      "p95": 0.4,
+      "p99": 0.8,
+      "mean": 0.2,
+      "min": 0.1,
+      "max": 1.2
+    },
+    {
+      "label": "Crime Trend (multi-year)",
+      "query": "show crime trend from 2019 to 2025",
+      "sql": "SELECT strftime('%Y', date_of_incident) as year, COUNT(*) as case_count\n                     FROM fir_cases GROUP BY year ORDER BY year",
+      "p50": 0.5,
+      "p95": 1.0,
+      "p99": 1.3,
+      "mean": 0.6,
+      "min": 0.4,
+      "max": 1.5
+    },
+    {
+      "label": "Hotspot Detection (Top 10)",
+      "query": "top crime hotspot stations",
+      "sql": "SELECT ps.station_name, d.district_name, COUNT(*) as case_count,\n                        AVG(f.severity_score) as avg_severity\n                 FROM fir_cases f\n                 JOIN police_stations ps ON f.station_id = ps.station_id\n                 JOIN districts d ON ps.district_id = d.district_id\n                 GROUP BY ps.station_id ORDER BY case_count DESC LIMIT 15",
+      "p50": 0.5,
+      "p95": 1.0,
+      "p99": 1.0,
+      "mean": 0.5,
+      "min": 0.4,
+      "max": 1.5
+    },
+    {
+      "label": "Accused / Criminal Search",
+      "query": "which accused are wanted repeat offenders?",
+      "sql": "SELECT a.name, a.age, a.occupation, a.criminal_history, a.arrest_status,\n                            COUNT(cr.record_id) as prior_cases\n                     FROM accused a\n                     LEFT JOIN criminal_records cr ON a.accused_id = cr.accused_id\n                     WHERE a.criminal_history > 0\n                     GROUP BY a.accused_id ORDER BY prior_cases DESC LIMIT 20",
+      "p50": 0.9,
+      "p95": 2.3,
+      "p99": 3.6,
+      "mean": 1.1,
+      "min": 0.8,
+      "max": 5.5
+    },
+    {
+      "label": "Victim Statistics",
+      "query": "victim age and gender statistics",
+      "sql": "SELECT\n                   CASE WHEN v.age < 18 THEN 'Minor (<18)'\n                        WHEN v.age < 30 THEN 'Youth (18-29)'\n                        WHEN v.age < 50 THEN 'Adult (30-49)'\n                        ELSE 'Senior (50+)' END as age_group,\n                   v.gender, COUNT(*) as victim_count\n                 FROM victims v GROUP BY age_group, v.gender ORDER BY victim_count DESC",
+      "p50": 1.2,
+      "p95": 2.8,
+      "p99": 3.7,
+      "mean": 1.4,
+      "min": 0.9,
+      "max": 5.4
+    },
+    {
+      "label": "Case Status Breakdown",
+      "query": "show case status breakdown pending vs chargesheet",
+      "sql": "SELECT status, COUNT(*) as case_count FROM fir_cases WHERE status = ? GROUP BY status",
+      "p50": 0.1,
+      "p95": 0.1,
+      "p99": 0.2,
+      "mean": 0.1,
+      "min": 0.0,
+      "max": 0.6
+    },
+    {
+      "label": "Officer / Station Performance",
+      "query": "police station performance officer stats",
+      "sql": "SELECT o.name, o.rank, ps.station_name, d.district_name, o.cases_handled\n                 FROM officers o\n                 JOIN police_stations ps ON o.station_id = ps.station_id\n                 JOIN districts d ON ps.district_id = d.district_id\n                 ORDER BY o.cases_handled DESC LIMIT 20",
+      "p50": 0.1,
+      "p95": 0.3,
+      "p99": 0.3,
+      "mean": 0.2,
+      "min": 0.1,
+      "max": 0.4
+    },
+    {
+      "label": "Property Crime / Recovery",
+      "query": "stolen property recovered value",
+      "sql": "SELECT property_type, COUNT(*) as items_stolen,\n                        SUM(estimated_value) as total_value,\n                        SUM(recovered) as recovered_count\n                 FROM stolen_property GROUP BY property_type ORDER BY total_value DESC",
+      "p50": 0.3,
+      "p95": 0.5,
+      "p99": 1.0,
+      "mean": 0.3,
+      "min": 0.2,
+      "max": 2.0
+    },
+    {
+      "label": "Severity Analysis",
+      "query": "most severe violent crimes",
+      "sql": "SELECT f.fir_number, f.crime_type, f.date_of_incident, d.district_name,\n                        f.severity_score, f.status\n                 FROM fir_cases f\n                 JOIN police_stations ps ON f.station_id = ps.station_id\n                 JOIN districts d ON ps.district_id = d.district_id\n                 WHERE f.severity_score >= 8 ORDER BY f.severity_score DESC LIMIT 25",
+      "p50": 0.1,
+      "p95": 0.5,
+      "p99": 0.7,
+      "mean": 0.2,
+      "min": 0.1,
+      "max": 1.0
+    }
+  ],
+  "db_perf": {
+    "db_size_mb": 1.41,
+    "db_size_bytes": 1482752,
+    "counts": {
+      "fir_cases": 1500,
+      "accused": 2530,
+      "victims": 2785,
+      "witnesses": 0,
+      "police_stations": 85,
+      "districts": 20,
+      "officers": 373,
+      "stolen_property": 755,
+      "case_progress": 0
+    },
+    "scan_report": [
+      {
+        "label": "Simple Count Query",
+        "plan": "SCAN fir_cases USING COVERING INDEX idx_fir_severity",
+        "full_scan": false
+      },
+      {
+        "label": "District-Level Aggregation",
+        "plan": "SCAN f USING COVERING INDEX idx_fir_station | SEARCH ps USING INTEGER PRIMARY KEY (rowid=?) | SEARCH d USING INTEGER PRIMARY KEY (rowid=?) | USE TEMP B-TREE FOR GROUP BY | USE TEMP B-TREE FOR ORDER BY",
+        "full_scan": false
+      },
+      {
+        "label": "Crime Type Breakdown",
+        "plan": "SCAN fir_cases USING COVERING INDEX idx_fir_crime_type | USE TEMP B-TREE FOR ORDER BY",
+        "full_scan": false
+      },
+      {
+        "label": "Crime Trend (multi-year)",
+        "plan": "SCAN fir_cases USING COVERING INDEX idx_fir_date | USE TEMP B-TREE FOR GROUP BY",
+        "full_scan": false
+      },
+      {
+        "label": "Hotspot Detection (Top 10)",
+        "plan": "SCAN ps | SEARCH d USING INTEGER PRIMARY KEY (rowid=?) | SEARCH f USING INDEX idx_fir_station (station_id=?) | USE TEMP B-TREE FOR ORDER BY",
+        "full_scan": false
+      },
+      {
+        "label": "Accused / Criminal Search",
+        "plan": "SCAN a | BLOOM FILTER ON cr (accused_id=?) | SEARCH cr USING AUTOMATIC COVERING INDEX (accused_id=?) LEFT-JOIN | USE TEMP B-TREE FOR ORDER BY",
+        "full_scan": true
+      },
+      {
+        "label": "Victim Statistics",
+        "plan": "SCAN v | USE TEMP B-TREE FOR GROUP BY | USE TEMP B-TREE FOR ORDER BY",
+        "full_scan": true
+      },
+      {
+        "label": "Case Status Breakdown",
+        "plan": "SEARCH fir_cases USING COVERING INDEX idx_fir_status (status=?)",
+        "full_scan": false
+      },
+      {
+        "label": "Officer / Station Performance",
+        "plan": "SCAN o | SEARCH ps USING INTEGER PRIMARY KEY (rowid=?) | SEARCH d USING INTEGER PRIMARY KEY (rowid=?) | USE TEMP B-TREE FOR ORDER BY",
+        "full_scan": true
+      },
+      {
+        "label": "Property Crime / Recovery",
+        "plan": "SCAN stolen_property | USE TEMP B-TREE FOR GROUP BY | USE TEMP B-TREE FOR ORDER BY",
+        "full_scan": true
+      },
+      {
+        "label": "Severity Analysis",
+        "plan": "SEARCH f USING INDEX idx_fir_severity (severity_score>?) | SEARCH ps USING INTEGER PRIMARY KEY (rowid=?) | SEARCH d USING INTEGER PRIMARY KEY (rowid=?)",
+        "full_scan": false
+      }
+    ],
+    "total_scans": 4,
+    "total_queries_checked": 11,
+    "existing_indexes": [
+      {
+        "name": "idx_fir_station",
+        "table": "fir_cases"
+      },
+      {
+        "name": "idx_fir_crime_type",
+        "table": "fir_cases"
+      },
+      {
+        "name": "idx_fir_date",
+        "table": "fir_cases"
+      },
+      {
+        "name": "idx_fir_severity",
+        "table": "fir_cases"
+      },
+      {
+        "name": "idx_fir_status",
+        "table": "fir_cases"
+      },
+      {
+        "name": "idx_stations_district",
+        "table": "police_stations"
+      },
+      {
+        "name": "idx_accused_fir",
+        "table": "accused"
+      },
+      {
+        "name": "idx_accused_status",
+        "table": "accused"
+      },
+      {
+        "name": "idx_accused_gang",
+        "table": "accused"
+      },
+      {
+        "name": "idx_victims_fir",
+        "table": "victims"
+      },
+      {
+        "name": "idx_stolen_property_fir",
+        "table": "stolen_property"
+      }
+    ]
+  },
+  "index_impact": {
+    "indexes_applied": [
+      "idx_fir_station",
+      "idx_fir_crime_type",
+      "idx_fir_date",
+      "idx_fir_severity",
+      "idx_fir_status",
+      "idx_stations_district",
+      "idx_accused_fir",
+      "idx_accused_status",
+      "idx_accused_gang",
+      "idx_victims_fir",
+      "idx_stolen_property_fir"
+    ],
+    "scan_report_before": [
+      {
+        "label": "Simple Count Query",
+        "plan": "SCAN fir_cases USING COVERING INDEX sqlite_autoindex_fir_cases_1",
+        "full_scan": false
+      },
+      {
+        "label": "District-Level Aggregation",
+        "plan": "SCAN f | SEARCH ps USING INTEGER PRIMARY KEY (rowid=?) | SEARCH d USING INTEGER PRIMARY KEY (rowid=?) | USE TEMP B-TREE FOR GROUP BY | USE TEMP B-TREE FOR ORDER BY",
+        "full_scan": true
+      },
+      {
+        "label": "Crime Type Breakdown",
+        "plan": "SCAN fir_cases | USE TEMP B-TREE FOR GROUP BY | USE TEMP B-TREE FOR ORDER BY",
+        "full_scan": true
+      },
+      {
+        "label": "Crime Trend (multi-year)",
+        "plan": "SCAN fir_cases | USE TEMP B-TREE FOR GROUP BY",
+        "full_scan": true
+      },
+      {
+        "label": "Hotspot Detection (Top 10)",
+        "plan": "SCAN f | SEARCH ps USING INTEGER PRIMARY KEY (rowid=?) | SEARCH d USING INTEGER PRIMARY KEY (rowid=?) | USE TEMP B-TREE FOR GROUP BY | USE TEMP B-TREE FOR ORDER BY",
+        "full_scan": true
+      },
+      {
+        "label": "Accused / Criminal Search",
+        "plan": "SCAN a | BLOOM FILTER ON cr (accused_id=?) | SEARCH cr USING AUTOMATIC COVERING INDEX (accused_id=?) LEFT-JOIN | USE TEMP B-TREE FOR ORDER BY",
+        "full_scan": true
+      },
+      {
+        "label": "Victim Statistics",
+        "plan": "SCAN v | USE TEMP B-TREE FOR GROUP BY | USE TEMP B-TREE FOR ORDER BY",
+        "full_scan": true
+      },
+      {
+        "label": "Case Status Breakdown",
+        "plan": "SCAN fir_cases",
+        "full_scan": true
+      },
+      {
+        "label": "Officer / Station Performance",
+        "plan": "SCAN o | SEARCH ps USING INTEGER PRIMARY KEY (rowid=?) | SEARCH d USING INTEGER PRIMARY KEY (rowid=?) | USE TEMP B-TREE FOR ORDER BY",
+        "full_scan": true
+      },
+      {
+        "label": "Property Crime / Recovery",
+        "plan": "SCAN stolen_property | USE TEMP B-TREE FOR GROUP BY | USE TEMP B-TREE FOR ORDER BY",
+        "full_scan": true
+      },
+      {
+        "label": "Severity Analysis",
+        "plan": "SCAN f | SEARCH ps USING INTEGER PRIMARY KEY (rowid=?) | SEARCH d USING INTEGER PRIMARY KEY (rowid=?) | USE TEMP B-TREE FOR ORDER BY",
+        "full_scan": true
+      }
+    ],
+    "scans_before": 10,
+    "total_queries_checked": 11,
+    "timing_before_ms": {
+      "crime_by_type (filtered)": 0.1,
+      "accused wanted (filtered)": 0.6
+    }
+  },
+  "data_acc": {
+    "total_cases": 1500,
+    "duplicate_firs": 0,
+    "null_crime_type": 0,
+    "null_station": 0,
+    "distinct_districts": 20,
+    "distinct_stations": 85,
+    "distinct_crime_types": 20,
+    "year_range": [
+      "2019",
+      "2025"
+    ],
+    "consistency_pct": 100.0
+  },
+  "intent_acc": {
+    "total": 26,
+    "correct": 23,
+    "accuracy_pct": 88.5,
+    "misses": [
+      [
+        "predict crime trend next month",
+        "predictive",
+        "crime_trend"
+      ],
+      [
+        "criminal network gang connections",
+        "network_analysis",
+        "accused_search"
+      ],
+      [
+        "linked associates of accused",
+        "network_analysis",
+        "accused_search"
+      ]
+    ],
+    "distinct_intents_defined": null
+  },
+  "mem": {
+    "rss_before_mb": 34.5,
+    "rss_after_mb": 34.4,
+    "delta_mb": -0.1
+  },
+  "concurrency": {
+    "concurrent_workers": 50,
+    "total_requests": 300,
+    "success_count": 300,
+    "errors": 0,
+    "success_rate_pct": 100.0,
+    "wall_time_s": 0.26,
+    "throughput_req_per_sec": 1163.3,
+    "throughput_req_per_min": 69798.0,
+    "p50_ms": 20.6,
+    "p95_ms": 62.3,
+    "p99_ms": 92.7,
+    "mean_ms": 25.0
+  },
+  "n_iterations": 200
+}
