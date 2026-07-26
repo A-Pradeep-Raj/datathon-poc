@@ -1129,7 +1129,7 @@ async function exportPDF() {
           doc.setTextColor(230, 237, 243);
           doc.setFont("helvetica", "normal");
           doc.setFontSize(10);
-          const lines = doc.splitTextToSize(msg.content, 180);
+          const lines = doc.splitTextToSize(stripPdfUnsafeChars(msg.content), 180);
           doc.text(lines, 20, y);
           y += lines.length * 5 + 3;
         } else {
@@ -1140,8 +1140,13 @@ async function exportPDF() {
           y += 5;
           doc.setTextColor(200, 210, 220);
           doc.setFont("helvetica", "normal");
-          // Strip markdown
-          const plain = msg.content.replace(/\*\*/g, "").replace(/\*/g, "").replace(/#+\s/g, "").replace(/•\s/g, "- ");
+          // Strip markdown, then strip emoji/symbols the built-in "helvetica"
+          // font can't render (jsPDF's standard fonts only cover Latin/WinAnsi
+          // glyphs -- unsupported Unicode code points like 📊/🧠/🔍 render as
+          // garbled bytes such as "Ø=ÜÊ" instead of being skipped).
+          const plain = stripPdfUnsafeChars(
+            msg.content.replace(/\*\*/g, "").replace(/\*/g, "").replace(/#+\s/g, "").replace(/•\s/g, "- ")
+          );
           const lines = doc.splitTextToSize(plain, 175);
           doc.text(lines, 20, y);
           y += lines.length * 4.5 + 6;
@@ -1153,10 +1158,14 @@ async function exportPDF() {
       doc.save(d.filename || "ksp_report.pdf");
       showToast("✅ PDF report exported successfully");
     } else {
-      // Fallback: open print dialog
-      const htmlContent = atob(d.html_b64);
+      // Fallback: open print dialog. NOTE: atob() alone returns a raw binary
+      // string, which mangles any multi-byte UTF-8 character (emoji,
+      // Kannada, the · middle-dot, etc.) into mojibake -- decode the bytes
+      // properly as UTF-8 instead.
+      const htmlContent = decodeBase64Utf8(d.html_b64);
       const w = window.open("", "_blank");
       w.document.write(`<html><head><title>KSP Report</title>
+        <meta charset="UTF-8">
         <style>body{font-family:Arial;padding:20px;} hr{border-color:#ccc;}</style>
         </head><body>${htmlContent}</body></html>`);
       w.print();
@@ -1258,4 +1267,43 @@ function escapeHtml(str) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+// jsPDF's built-in fonts (helvetica/times/courier) only embed the WinAnsi
+// (Latin-1 + a few extra) glyph set. Any character outside that range --
+// emoji like 📊/🧠/🔍/🚨, dingbats, variation selectors, ZWJ, etc. -- has no
+// matching glyph, so the PDF renderer falls back to whatever raw bytes it
+// can find in the font's internal encoding table, producing garbled
+// mojibake such as "Ø=ÜÊ" instead of silently skipping the character.
+// Stripping them before calling doc.text()/splitTextToSize() avoids this;
+// Kannada (ಕನ್ನಡ) text is unaffected since it's outside these ranges too --
+// note it will still not RENDER with helvetica (which has no Kannada
+// glyphs), but at least it fails safely by being invisible rather than
+// showing corrupted symbols.
+function stripPdfUnsafeChars(str) {
+  if (!str) return "";
+  return String(str).replace(
+    // Covers all emoji/pictographs actually used in this app (📊 🧠 🔍 🚨
+    // ⚠️ ✅ ❌ 🎤 🔊 🗑️ ➤ 🧭 📈 📋 💰 🕸️ 👥 🏥 🏫 🔴 🚪 etc.) plus variation
+    // selectors (FE0F) and zero-width joiner (200D) used in multi-codepoint
+    // emoji, WITHOUT touching normal WinAnsi-safe punctuation like em-dash
+    // (—), curly quotes (“ ”), ellipsis (…) or the bullet (•) that jsPDF's
+    // built-in fonts render correctly.
+    /[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}]/gu,
+    ""
+  ).replace(/[ \t]{2,}/g, " ").trim();
+}
+
+// atob() decodes base64 into a raw "binary string" where each char code is
+// a single byte (0-255) -- it does NOT interpret multi-byte UTF-8 sequences.
+// Since the backend base64-encodes UTF-8 bytes (see export_pdf() in
+// index.py: html_content.encode() defaults to UTF-8), decoding with atob()
+// alone corrupts any non-ASCII character (emoji, Kannada, the · middle-dot)
+// into mojibake. Re-interpreting the binary string's bytes through
+// TextDecoder('utf-8') decodes them correctly.
+function decodeBase64Utf8(b64) {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new TextDecoder("utf-8").decode(bytes);
 }
