@@ -1101,61 +1101,7 @@ async function exportPDF() {
     const d = await res.json();
 
     if (d.success && typeof jspdf !== "undefined") {
-      const { jsPDF } = jspdf;
-      const doc = new jsPDF({ unit: "mm", format: "a4" });
-
-      doc.setFillColor(13, 17, 23);
-      doc.rect(0, 0, 210, 297, "F");
-      doc.setTextColor(230, 237, 243);
-
-      doc.setFontSize(18);
-      doc.setFont("helvetica", "bold");
-      doc.text("KRIME AI", 15, 20);
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(139, 148, 158);
-      doc.text("Karnataka State Police · SCRB · Datathon 2026", 15, 27);
-      doc.text("Report generated: " + new Date().toLocaleString(), 15, 33);
-
-      let y = 45;
-      conversation.forEach((msg, i) => {
-        if (y > 270) { doc.addPage(); y = 20; }
-        if (msg.role === "user") {
-          doc.setTextColor(251, 188, 4);
-          doc.setFontSize(11);
-          doc.setFont("helvetica", "bold");
-          doc.text(`[${msg.timestamp}] Query:`, 15, y);
-          y += 6;
-          doc.setTextColor(230, 237, 243);
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(10);
-          const lines = doc.splitTextToSize(stripPdfUnsafeChars(msg.content), 180);
-          doc.text(lines, 20, y);
-          y += lines.length * 5 + 3;
-        } else {
-          doc.setTextColor(52, 168, 83);
-          doc.setFontSize(10);
-          doc.setFont("helvetica", "bold");
-          doc.text("AI Response:", 15, y);
-          y += 5;
-          doc.setTextColor(200, 210, 220);
-          doc.setFont("helvetica", "normal");
-          // Strip markdown, then strip emoji/symbols the built-in "helvetica"
-          // font can't render (jsPDF's standard fonts only cover Latin/WinAnsi
-          // glyphs -- unsupported Unicode code points like 📊/🧠/🔍 render as
-          // garbled bytes such as "Ø=ÜÊ" instead of being skipped).
-          const plain = stripPdfUnsafeChars(
-            msg.content.replace(/\*\*/g, "").replace(/\*/g, "").replace(/#+\s/g, "").replace(/•\s/g, "- ")
-          );
-          const lines = doc.splitTextToSize(plain, 175);
-          doc.text(lines, 20, y);
-          y += lines.length * 4.5 + 6;
-          doc.setDrawColor(48, 54, 61);
-          doc.line(15, y - 2, 195, y - 2);
-        }
-      });
-
-      doc.save(d.filename || "ksp_report.pdf");
+      await renderConversationToPdf(d.filename);
       showToast("✅ PDF report exported successfully");
     } else {
       // Fallback: open print dialog. NOTE: atob() alone returns a raw binary
@@ -1174,6 +1120,138 @@ async function exportPDF() {
     showToast("❌ Export failed: " + e.message);
   } finally {
     hideLoading();
+  }
+}
+
+// jsPDF's built-in fonts (helvetica/times/courier) only embed the WinAnsi
+// (Latin-1) glyph set. Any character outside that -- Kannada (ಕನ್ನಡ),
+// emoji like 📊/🧠/🔍, etc. -- has no matching glyph and doc.text() either
+// silently drops it or (worse, as reported) renders garbled bytes from the
+// font's internal encoding table instead. Rather than trying to strip/detect
+// every unsupported script, we render the conversation as real HTML (reusing
+// the exact same marked.js + .msg-bubble/table CSS already used on-screen,
+// where Kannada and tables are known to display correctly) and rasterize it
+// into the PDF via jsPDF's doc.html() + html2canvas. This uses the browser's
+// own font stack, so any language the browser can render, the PDF can too --
+// and markdown tables become real <table> grids instead of plain text with
+// stray pipe characters.
+async function renderConversationToPdf(filename) {
+  const { jsPDF } = jspdf;
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
+  const pageWidthPt = doc.internal.pageSize.getWidth();
+
+  // Build an off-screen container with the report content as real HTML.
+  const container = document.createElement("div");
+  container.style.cssText = [
+    "position:fixed", "left:0", "top:0", "z-index:-1000",
+    "width:760px", "background:#0d1117", "color:#e6edf3",
+    "font-family:'Segoe UI',system-ui,-apple-system,sans-serif",
+    "padding:28px", "box-sizing:border-box"
+  ].join(";");
+
+  const officer = (currentUser && currentUser.full_name) || "Investigating Officer";
+  const badge = (currentUser && currentUser.badge_number) || ("KA-" + Math.floor(Math.random() * 90000 + 10000));
+
+  const headerHtml = `
+    <div style="border-bottom:2px solid #30363d;padding-bottom:14px;margin-bottom:18px;">
+      <div style="font-size:22px;font-weight:700;color:#e6edf3;">KRIME AI</div>
+      <div style="font-size:12px;color:#8b949e;margin-top:4px;">Karnataka State Police &middot; SCRB &middot; Datathon 2026</div>
+      <div style="font-size:11px;color:#8b949e;margin-top:2px;">
+        Officer: ${escapeHtml(officer)} | Badge: ${escapeHtml(badge)} | Generated: ${escapeHtml(new Date().toLocaleString())}
+      </div>
+    </div>`;
+
+  const bodyHtml = conversation.map(msg => {
+    if (msg.role === "user") {
+      return `
+        <div style="margin:14px 0 6px;">
+          <div style="font-size:12px;font-weight:700;color:#fbbc04;">[${escapeHtml(msg.timestamp || "")}] Query:</div>
+          <div style="font-size:13px;color:#e6edf3;margin-top:3px;white-space:pre-wrap;">${escapeHtml(msg.content)}</div>
+        </div>`;
+    }
+    const rendered = typeof marked !== "undefined" ? marked.parse(msg.content || "") : escapeHtml(msg.content || "");
+    return `
+      <div style="margin:6px 0 14px;">
+        <div style="font-size:12px;font-weight:700;color:#34a853;margin-bottom:4px;">AI Response:</div>
+        <div class="pdf-msg-body" style="font-size:12px;color:#c8d2dc;line-height:1.5;">${rendered}</div>
+      </div>
+      <hr style="border:none;border-top:1px solid #30363d;margin:10px 0;">`;
+  }).join("");
+
+  // Reuse the same table look as the on-screen chat bubbles (see .msg-bubble
+  // table/th/td rules in style.css) so exported tables look like real grids.
+  const tableCss = `
+    <style>
+      .pdf-msg-body p { margin: 4px 0; }
+      .pdf-msg-body ul, .pdf-msg-body ol { padding-left: 18px; margin: 4px 0; }
+      .pdf-msg-body strong { color: #fbbc04; }
+      .pdf-msg-body table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 8px 0;
+        font-size: 11px;
+      }
+      .pdf-msg-body th, .pdf-msg-body td {
+        border: 1px solid #30363d;
+        padding: 5px 7px;
+        text-align: left;
+        vertical-align: top;
+        color: #e6edf3;
+      }
+      .pdf-msg-body th { background: rgba(26,115,232,0.18); color: #8ecbff; }
+      .pdf-msg-body tr:nth-child(even) { background: rgba(255,255,255,0.03); }
+    </style>`;
+
+  container.innerHTML = tableCss + headerHtml + bodyHtml;
+  document.body.appendChild(container);
+
+  try {
+    // IMPORTANT: jsPDF's doc.html() does NOT rasterize pixels by default --
+    // it replays html2canvas's parsed layout through jsPDF's own vector
+    // "context2d" shim, which still draws glyphs via doc.text() under the
+    // hood. That means it still hits the WinAnsiEncoding font limitation and
+    // Kannada still comes out as mojibake, even though CSS layout (e.g.
+    // tables) is respected. To get TRUE font-agnostic rendering, we call
+    // html2canvas() directly ourselves to get a real pixel bitmap (rendered
+    // using the browser's own font engine, which already displays Kannada
+    // correctly on-screen), then embed that bitmap as a plain image via
+    // doc.addImage() -- no jsPDF font/glyph logic is involved at all for the
+    // text pixels themselves. Sliced across pages since a canvas image can't
+    // span multiple PDF pages directly.
+    const canvas = await html2canvas(container, {
+      scale: 2,
+      backgroundColor: "#0d1117",
+      useCORS: true
+    });
+
+    const pageHeightPt = doc.internal.pageSize.getHeight();
+    const pxToPt = pageWidthPt / canvas.width;
+    const pageHeightPx = Math.floor(pageHeightPt / pxToPt);
+
+    let renderedPx = 0;
+    let firstPage = true;
+    while (renderedPx < canvas.height) {
+      const sliceHeightPx = Math.min(pageHeightPx, canvas.height - renderedPx);
+
+      const sliceCanvas = document.createElement("canvas");
+      sliceCanvas.width = canvas.width;
+      sliceCanvas.height = sliceHeightPx;
+      sliceCanvas.getContext("2d").drawImage(
+        canvas, 0, renderedPx, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx
+      );
+
+      if (!firstPage) doc.addPage();
+      doc.addImage(
+        sliceCanvas.toDataURL("image/png"), "PNG",
+        0, 0, pageWidthPt, sliceHeightPx * pxToPt
+      );
+      firstPage = false;
+      renderedPx += sliceHeightPx;
+    }
+
+    doc.save(filename || "ksp_report.pdf");
+  } finally {
+    document.body.removeChild(container);
   }
 }
 

@@ -11,6 +11,11 @@
   <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
   <!-- jsPDF for PDF export -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- html2canvas: required by jsPDF's doc.html() renderer. Using the browser's
+       own canvas rasterization means Kannada glyphs (and any other Unicode
+       text) render correctly in exported PDFs, since jsPDF's built-in fonts
+       have no Kannada glyph coverage on their own. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <!-- Marked.js for markdown rendering -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
