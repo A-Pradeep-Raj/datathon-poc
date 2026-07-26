@@ -88,12 +88,16 @@ def _get_quickml_access_token() -> Optional[str]:
         return None
 
 
-def generate_llm_insight(user_query: str, data_summary: str) -> Optional[str]:
+def generate_llm_insight(user_query: str, data_summary: str, language: str = "en") -> Optional[str]:
     """
     Call Catalyst QuickML's GLM-4.7-Flash LLM Serving endpoint to produce a
     short natural-language insight/summary grounded in the SQL results.
     Returns None if QuickML is not configured or the call fails (caller
     should gracefully fall back to the deterministic response).
+
+    `language` ("en" or "kn") controls the language of the generated
+    insight itself, so Kannada conversations get a fully Kannada reply
+    instead of an English insight bolted onto a translated body.
 
     Note: the GLM endpoint's safety layer rejects requests that use the
     "system" role (treats it as a prompt-injection attempt), so instructions
@@ -103,10 +107,17 @@ def generate_llm_insight(user_query: str, data_summary: str) -> Optional[str]:
     if not token:
         return None
 
+    language_instruction = (
+        "Write your ENTIRE reply in natural, fluent Kannada (ಕನ್ನಡ script). "
+        "Do not use English words except for proper nouns/numbers that don't "
+        "translate naturally. "
+        if language == "kn" else ""
+    )
     prompt = (
         "You are KRIME AI, a crime-intelligence assistant for Karnataka State Police. "
         "Based ONLY on the data below, write a concise (2-3 sentence) analytical insight "
         "for an investigating officer. Do not invent numbers not present in the data. "
+        f"{language_instruction}"
         "IMPORTANT: Output ONLY the finished 2-3 sentence insight as plain prose. "
         "Do NOT show your thinking, drafts, numbered steps, or any text other than "
         "the finished insight itself. Start your reply directly with the insight text.\n\n"
@@ -179,6 +190,59 @@ def _clean_llm_output(text: str) -> str:
         text = re.sub(r"^\*+\s*Draft\s*\d*\**:?\s*", "", text, flags=re.IGNORECASE).strip()
         text = text.strip('"').strip()
     return text.strip()
+
+
+def translate_response_to_kannada(text: str) -> str:
+    """
+    Translate a finished English response (deterministic data summary,
+    tables, etc.) into Kannada using Catalyst QuickML's GLM-4.7-Flash LLM,
+    so that when a user asks a question in Kannada, the reply comes back
+    fully in Kannada instead of English. Markdown formatting, numbers, and
+    emoji are preserved as-is; only the surrounding words are translated.
+
+    Falls back to returning the original English text unchanged if QuickML
+    is not configured or the call fails, so the chatbot never breaks.
+    """
+    if not text:
+        return text
+    token = _get_quickml_access_token()
+    if not token:
+        return text
+
+    prompt = (
+        "Translate the following crime-intelligence assistant reply into natural, "
+        "fluent Kannada (ಕನ್ನಡ script). Preserve ALL Markdown formatting exactly "
+        "(**bold**, tables with | pipes, bullet points, emoji, numbers, percentages, "
+        "dates) -- only translate the surrounding English words/sentences into "
+        "Kannada. Do not add any commentary or extra text of your own. "
+        "IMPORTANT: Output ONLY the translated Kannada text, nothing else.\n\n"
+        f"TEXT TO TRANSLATE:\n{text}\n\n"
+        "KANNADA_TRANSLATION>>>"
+    )
+
+    try:
+        resp = _requests.post(
+            _QUICKML_GLM_ENDPOINT,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Zoho-oauthtoken {token}",
+                "CATALYST-ORG": _QUICKML_ORG_ID,
+            },
+            json={
+                "model": _QUICKML_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 2000,
+                "temperature": 0.2,
+                "stream": False,
+            },
+            timeout=30,
+        )
+        data = resp.json()
+        translated = (data.get("response") or "").strip()
+        cleaned = _clean_llm_output(translated)
+        return cleaned or text
+    except Exception:
+        return text
 
 
 def query_rag(question: str, document_ids: Optional[List[str]] = None) -> dict:
@@ -1093,7 +1157,7 @@ def _build_markdown_table(rows: list, columns: list, title: str, intro: str = ""
     return "\n".join(lines)
 
 
-def generate_natural_response(query: str, intents: list, results: list, chart_type: str, resolved: Optional[dict] = None) -> str:
+def generate_natural_response(query: str, intents: list, results: list, chart_type: str, resolved: Optional[dict] = None, language: str = "en") -> str:
     """
     Generate a human-readable response from query results.
     Builds the deterministic, explainable (SQL-backed) response first, then
@@ -1106,8 +1170,15 @@ def generate_natural_response(query: str, intents: list, results: list, chart_ty
     entities (if any) were carried over from earlier in the conversation.
     When present, a short "remembered from earlier" note is prepended so the
     user can see exactly what context was applied (explainable AI).
+
+    `language` ("en" or "kn") controls the language of the FULL response --
+    when "kn", the deterministic body is translated into Kannada and the AI
+    insight (if any) is generated directly in Kannada, so a Kannada question
+    always gets a fully Kannada answer instead of a mix of languages.
     """
     base_response = _generate_deterministic_response(query, intents, results, chart_type, resolved)
+    if language == "kn":
+        base_response = translate_response_to_kannada(base_response)
 
     intent = intents[0] if intents else "general"
     if intent == "greeting" or not results or "error" in results[0]:
@@ -1115,7 +1186,7 @@ def generate_natural_response(query: str, intents: list, results: list, chart_ty
 
     # Summarize just enough data for the LLM prompt (keep payload small)
     data_summary = json.dumps(results[:15], default=str, ensure_ascii=False)
-    insight = generate_llm_insight(query, data_summary)
+    insight = generate_llm_insight(query, data_summary, language=language)
     if insight:
         return f"{base_response}\n\n---\n🧠 **AI Insight (QuickML · GLM-4.7-Flash):** {insight}"
     return base_response

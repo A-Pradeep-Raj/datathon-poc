@@ -36,12 +36,10 @@ let networkInstance = null;
 let currentTabId = "chat";
 let dbCharts = {};           // chart.js instances keyed by canvas id
 let sessionId = "session_" + Date.now();
-let voiceOutputEnabled = true; // text-to-speech for AI responses
 
 // RAG (Documents tab) has its own independent language + voice state,
 // separate from the AI Chat tab, since they are different conversations.
 let ragLang = "en";
-let ragVoiceOutputEnabled = true;
 let ragIsRecording = false;
 let ragRecognition = null;
 
@@ -219,7 +217,6 @@ async function askRagQuestion(presetQuestion) {
         <div class="rag-answer">🧠 ${data.answer}</div>
         ${sourcesHtml ? `<div class="rag-sources"><div class="rag-sources-title">Sources:</div>${sourcesHtml}</div>` : ""}
       `;
-      speakRagText(data.answer);
     } else {
       entry.innerHTML = `
         <div class="rag-question">🧑‍💼 ${question}</div>
@@ -297,43 +294,12 @@ function toggleRagVoice() {
     document.getElementById("ragVoiceBtn").classList.remove("recording");
     document.getElementById("ragVoiceStatus").textContent = "";
   } else {
-    // Stop any AI speech currently playing so it doesn't overlap the mic
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
     ragRecognition.lang = ragLang === "kn" ? "kn-IN" : "en-IN";
     ragRecognition.start();
     ragIsRecording = true;
     document.getElementById("ragVoiceBtn").classList.add("recording");
     document.getElementById("ragVoiceStatus").textContent = "🔴 Listening… Speak now";
   }
-}
-
-// ── RAG VOICE OUTPUT (Text-to-Speech, Documents tab) ──────────────────────
-function toggleRagVoiceOutput() {
-  ragVoiceOutputEnabled = !ragVoiceOutputEnabled;
-  const btn = document.getElementById("ragVoiceOutputBtn");
-  if (btn) {
-    btn.classList.toggle("active", ragVoiceOutputEnabled);
-    btn.title = ragVoiceOutputEnabled ? "Voice replies: ON (click to mute)" : "Voice replies: OFF (click to unmute)";
-    btn.textContent = ragVoiceOutputEnabled ? "🔊" : "🔇";
-  }
-  if (!ragVoiceOutputEnabled && "speechSynthesis" in window) window.speechSynthesis.cancel();
-}
-
-function speakRagText(markdownText) {
-  if (!ragVoiceOutputEnabled || !("speechSynthesis" in window) || !markdownText) return;
-  try {
-    const plain = markdownText
-      .replace(/[#*_`>]+/g, "")
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-      .replace(/\n+/g, ". ")
-      .trim();
-    if (!plain) return;
-    window.speechSynthesis.cancel(); // don't overlap with previous utterance
-    const utterance = new SpeechSynthesisUtterance(plain.substring(0, 600));
-    utterance.lang = ragLang === "kn" ? "kn-IN" : "en-IN";
-    utterance.rate = 1.0;
-    window.speechSynthesis.speak(utterance);
-  } catch (_) { /* speech synthesis is best-effort */ }
 }
 
 // ── ANOMALY DETECTION (QuickML AutoML Pipeline) ──────────────────
@@ -451,7 +417,6 @@ async function sendMessage() {
       const ts = new Date().toLocaleTimeString();
       addMessageBubble("assistant", data.response, ts);
       conversation.push({ role: "assistant", content: data.response, timestamp: ts });
-      speakText(data.response);
 
       // Render chart if data available
       if (data.data && data.data.length > 0 && data.chart_type !== "number") {
@@ -1238,44 +1203,12 @@ function toggleVoice() {
     document.getElementById("voiceBtn").classList.remove("recording");
     document.getElementById("voiceStatus").textContent = "";
   } else {
-    // Stop any AI speech currently playing so it doesn't overlap the mic
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
     mediaRecognition.lang = currentLang === "kn" ? "kn-IN" : "en-IN";
     mediaRecognition.start();
     isRecording = true;
     document.getElementById("voiceBtn").classList.add("recording");
     document.getElementById("voiceStatus").textContent = "🔴 Listening… Speak now";
   }
-}
-
-// ── VOICE OUTPUT (Text-to-Speech) ──────────────────────────────────────────
-function toggleVoiceOutput() {
-  voiceOutputEnabled = !voiceOutputEnabled;
-  const btn = document.getElementById("voiceOutputBtn");
-  if (btn) {
-    btn.classList.toggle("active", voiceOutputEnabled);
-    btn.title = voiceOutputEnabled ? "Voice replies: ON (click to mute)" : "Voice replies: OFF (click to unmute)";
-    btn.textContent = voiceOutputEnabled ? "🔊" : "🔇";
-  }
-  if (!voiceOutputEnabled && "speechSynthesis" in window) window.speechSynthesis.cancel();
-}
-
-function speakText(markdownText) {
-  if (!voiceOutputEnabled || !("speechSynthesis" in window) || !markdownText) return;
-  try {
-    // Strip markdown/formatting so speech doesn't read out symbols
-    const plain = markdownText
-      .replace(/[#*_`>]+/g, "")
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-      .replace(/\n+/g, ". ")
-      .trim();
-    if (!plain) return;
-    window.speechSynthesis.cancel(); // don't overlap with previous utterance
-    const utterance = new SpeechSynthesisUtterance(plain.substring(0, 600));
-    utterance.lang = currentLang === "kn" ? "kn-IN" : "en-IN";
-    utterance.rate = 1.0;
-    window.speechSynthesis.speak(utterance);
-  } catch (_) { /* speech synthesis is best-effort */ }
 }
 
 // ── DB Init ───────────────────────────────────────────────────────────────

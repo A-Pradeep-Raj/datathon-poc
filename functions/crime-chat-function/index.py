@@ -21,9 +21,9 @@ if sys.stderr.encoding != "utf-8":
 # Import our modules
 from synthetic_data import create_database
 from ai_engine import (
-    translate_kannada_to_english, detect_intent, detect_greeting, build_sql_query,
-    execute_query, generate_natural_response, get_dashboard_stats, query_rag,
-    scan_stations_for_anomalies
+    translate_kannada_to_english, translate_response_to_kannada, detect_intent,
+    detect_greeting, build_sql_query, execute_query, generate_natural_response,
+    get_dashboard_stats, query_rag, scan_stations_for_anomalies
 )
 import auth as auth_module
 
@@ -213,7 +213,7 @@ def chat():
             intents = ["greeting"]
 
         if intents[0] == "greeting":
-            response_text = generate_natural_response(translated_query, intents, [], "none")
+            response_text = generate_natural_response(translated_query, intents, [], "none", language=language)
             return jsonify({
                 "success": True,
                 "query": user_query,
@@ -239,8 +239,9 @@ def chat():
         results = execute_query(conn, sql, params)
 
         # Generate natural language response (includes a transparency note
-        # when context was carried over from earlier in the conversation)
-        response_text = generate_natural_response(translated_query, intents, results, chart_type, resolved)
+        # when context was carried over from earlier in the conversation).
+        # `language` ensures Kannada questions get a fully Kannada answer.
+        response_text = generate_natural_response(translated_query, intents, results, chart_type, resolved, language=language)
 
         # Persist the resolved context so the NEXT turn in this session can
         # build on it.
@@ -304,12 +305,18 @@ def rag_query():
 
         result = query_rag(translated_question, document_ids)
 
+        # Translate the grounded answer back into Kannada so the reply
+        # matches the language the question was asked in.
+        answer = result["answer"]
+        if language == "kn" and answer:
+            answer = translate_response_to_kannada(answer)
+
         return jsonify({
             "success": result["success"],
             "query": question,
             "translated_query": translated_question,
             "language": language,
-            "answer": result["answer"],
+            "answer": answer,
             "sources": result["sources"],
             "error": result["error"],
             "timestamp": datetime.now().isoformat()
