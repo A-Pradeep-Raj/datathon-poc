@@ -623,9 +623,18 @@ html, body {
   gap: 14px;
 }
 
+.rag-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
 .rag-input-row {
   display: flex;
   gap: 10px;
+  align-items: center;
 }
 .rag-input-row input {
   flex: 1;

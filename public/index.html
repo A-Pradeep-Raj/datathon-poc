@@ -361,10 +361,21 @@
           <p class="subtitle">Ask questions about SOPs, policy manuals, and investigation guidelines using Catalyst QuickML RAG</p>
         </div>
         <div class="rag-panel">
+          <div class="rag-toolbar">
+            <div class="lang-switch">
+              <button class="lang-btn active" id="btn-en-rag" onclick="setLangRag('en')">🇬🇧 English</button>
+              <button class="lang-btn" id="btn-kn-rag" onclick="setLangRag('kn')">🇮🇳 ಕನ್ನಡ</button>
+            </div>
+            <div class="chat-actions">
+              <button class="icon-btn active" id="ragVoiceOutputBtn" onclick="toggleRagVoiceOutput()" title="Voice replies: ON (click to mute)">🔊</button>
+            </div>
+          </div>
           <div class="rag-input-row">
+            <button class="icon-btn voice-btn" id="ragVoiceBtn" onclick="toggleRagVoice()" title="Voice Input">🎤</button>
             <input type="text" id="ragInput" placeholder="e.g. What is the case clearance rate target?" onkeypress="if(event.key==='Enter') askRagQuestion()" />
             <button class="send-btn" onclick="askRagQuestion()">Ask ➤</button>
           </div>
+          <div class="voice-status" id="ragVoiceStatus"></div>
           <div class="rag-examples" id="ragExamples">
             <span class="rag-example-chip" onclick="askRagQuestion('What is the FIR registration timeline?')">FIR registration timeline?</span>
             <span class="rag-example-chip" onclick="askRagQuestion('What are the severity scoring guidelines?')">Severity scoring guidelines?</span>

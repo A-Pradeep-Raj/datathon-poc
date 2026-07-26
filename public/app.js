@@ -38,6 +38,13 @@ let dbCharts = {};           // chart.js instances keyed by canvas id
 let sessionId = "session_" + Date.now();
 let voiceOutputEnabled = true; // text-to-speech for AI responses
 
+// RAG (Documents tab) has its own independent language + voice state,
+// separate from the AI Chat tab, since they are different conversations.
+let ragLang = "en";
+let ragVoiceOutputEnabled = true;
+let ragIsRecording = false;
+let ragRecognition = null;
+
 // ── AUTH / ROLE-BASED SECURE ACCESS ────────────────────────────────────────
 let authToken = sessionStorage.getItem("krimeai_token") || null;
 let currentUser = null; // { username, role, full_name, badge_number }
@@ -121,6 +128,7 @@ function enterApp() {
   renderSuggestions(DEFAULT_SUGGESTIONS);
   ensureDbReady();
   setupVoice();
+  setupRagVoice();
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────
@@ -193,7 +201,7 @@ async function askRagQuestion(presetQuestion) {
     const res = await fetch(`${API_BASE}/api/rag-query`, {
       method: "POST",
       headers: authHeaders(),
-      body: JSON.stringify({ query: question })
+      body: JSON.stringify({ query: question, language: ragLang })
     });
     const data = await res.json();
     const entry = document.getElementById(qId);
@@ -211,6 +219,7 @@ async function askRagQuestion(presetQuestion) {
         <div class="rag-answer">🧠 ${data.answer}</div>
         ${sourcesHtml ? `<div class="rag-sources"><div class="rag-sources-title">Sources:</div>${sourcesHtml}</div>` : ""}
       `;
+      speakRagText(data.answer);
     } else {
       entry.innerHTML = `
         <div class="rag-question">🧑‍💼 ${question}</div>
@@ -228,6 +237,103 @@ async function askRagQuestion(presetQuestion) {
   }
 
   input.value = "";
+}
+
+// ── RAG LANGUAGE SWITCH (Documents tab) ──────────────────────────────────
+function setLangRag(lang) {
+  ragLang = lang;
+  document.getElementById("btn-en-rag").classList.toggle("active", lang === "en");
+  document.getElementById("btn-kn-rag").classList.toggle("active", lang === "kn");
+  const input = document.getElementById("ragInput");
+  if (input) {
+    input.placeholder = lang === "kn"
+      ? "ಉದಾ. ಪ್ರಕರಣ ಇತ್ಯರ್ಥ ದರದ ಗುರಿ ಏನು?"
+      : "e.g. What is the case clearance rate target?";
+  }
+  if (ragRecognition) ragRecognition.lang = lang === "kn" ? "kn-IN" : "en-IN";
+}
+
+// ── RAG VOICE INPUT (Documents tab) ───────────────────────────────────────
+function setupRagVoice() {
+  const ragVoiceBtn = document.getElementById("ragVoiceBtn");
+  if (!('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
+    if (ragVoiceBtn) ragVoiceBtn.style.display = "none";
+    return;
+  }
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  ragRecognition = new SpeechRecognition();
+  ragRecognition.continuous = false;
+  ragRecognition.interimResults = true;
+  ragRecognition.lang = ragLang === "kn" ? "kn-IN" : "en-IN";
+
+  ragRecognition.onresult = (event) => {
+    let transcript = Array.from(event.results).map(r => r[0].transcript).join("");
+    document.getElementById("ragInput").value = transcript;
+    document.getElementById("ragVoiceStatus").textContent = "🎤 " + transcript;
+  };
+
+  ragRecognition.onend = () => {
+    ragIsRecording = false;
+    document.getElementById("ragVoiceBtn").classList.remove("recording");
+    document.getElementById("ragVoiceStatus").textContent = "";
+    // Auto-send if we have input
+    const val = document.getElementById("ragInput").value.trim();
+    if (val) askRagQuestion();
+  };
+
+  ragRecognition.onerror = (e) => {
+    ragIsRecording = false;
+    document.getElementById("ragVoiceBtn").classList.remove("recording");
+    document.getElementById("ragVoiceStatus").textContent = "";
+    showToast("⚠️ Voice error: " + e.error);
+  };
+}
+
+function toggleRagVoice() {
+  if (!ragRecognition) { showToast("⚠️ Voice not supported in this browser"); return; }
+  if (ragIsRecording) {
+    ragRecognition.stop();
+    ragIsRecording = false;
+    document.getElementById("ragVoiceBtn").classList.remove("recording");
+    document.getElementById("ragVoiceStatus").textContent = "";
+  } else {
+    // Stop any AI speech currently playing so it doesn't overlap the mic
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    ragRecognition.lang = ragLang === "kn" ? "kn-IN" : "en-IN";
+    ragRecognition.start();
+    ragIsRecording = true;
+    document.getElementById("ragVoiceBtn").classList.add("recording");
+    document.getElementById("ragVoiceStatus").textContent = "🔴 Listening… Speak now";
+  }
+}
+
+// ── RAG VOICE OUTPUT (Text-to-Speech, Documents tab) ──────────────────────
+function toggleRagVoiceOutput() {
+  ragVoiceOutputEnabled = !ragVoiceOutputEnabled;
+  const btn = document.getElementById("ragVoiceOutputBtn");
+  if (btn) {
+    btn.classList.toggle("active", ragVoiceOutputEnabled);
+    btn.title = ragVoiceOutputEnabled ? "Voice replies: ON (click to mute)" : "Voice replies: OFF (click to unmute)";
+    btn.textContent = ragVoiceOutputEnabled ? "🔊" : "🔇";
+  }
+  if (!ragVoiceOutputEnabled && "speechSynthesis" in window) window.speechSynthesis.cancel();
+}
+
+function speakRagText(markdownText) {
+  if (!ragVoiceOutputEnabled || !("speechSynthesis" in window) || !markdownText) return;
+  try {
+    const plain = markdownText
+      .replace(/[#*_`>]+/g, "")
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      .replace(/\n+/g, ". ")
+      .trim();
+    if (!plain) return;
+    window.speechSynthesis.cancel(); // don't overlap with previous utterance
+    const utterance = new SpeechSynthesisUtterance(plain.substring(0, 600));
+    utterance.lang = ragLang === "kn" ? "kn-IN" : "en-IN";
+    utterance.rate = 1.0;
+    window.speechSynthesis.speak(utterance);
+  } catch (_) { /* speech synthesis is best-effort */ }
 }
 
 // ── ANOMALY DETECTION (QuickML AutoML Pipeline) ──────────────────

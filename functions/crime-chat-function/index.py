@@ -292,15 +292,23 @@ def rag_query():
         # NOTE: RAG doc Q&A allowed for all authenticated roles (see decorator
         # applied to the route below).
         document_ids = body.get("document_ids")  # optional override
+        language = body.get("language", "en")  # "en" or "kn" (mirrors /api/chat)
 
         if not question:
             return jsonify({"success": False, "error": "Query is empty"}), 400
 
-        result = query_rag(question, document_ids)
+        # Translate Kannada keywords to English before hitting the RAG
+        # service (same lightweight keyword-map approach used for /api/chat),
+        # so voice/typed Kannada questions still retrieve the right documents.
+        translated_question = translate_kannada_to_english(question) if language == "kn" else question
+
+        result = query_rag(translated_question, document_ids)
 
         return jsonify({
             "success": result["success"],
             "query": question,
+            "translated_query": translated_question,
+            "language": language,
             "answer": result["answer"],
             "sources": result["sources"],
             "error": result["error"],
