@@ -37,6 +37,16 @@ let currentTabId = "chat";
 let dbCharts = {};           // chart.js instances keyed by canvas id
 let sessionId = "session_" + Date.now();
 
+// Analytics tab "AI Predictive Insights" and "AI Anomaly Detection" sections
+// call slow QuickML-backed endpoints. These flags let us kick off both
+// requests in the background as soon as the user logs in (see
+// preloadAnalyticsInsights(), called from enterApp()) so that by the time the
+// user actually clicks the Analytics tab, the results are already cached and
+// display instantly instead of showing a multi-second loading state.
+let predictiveLoaded = false;
+let anomalyLoaded = false;
+let analyticsPreloadStarted = false;
+
 // RAG (Documents tab) has its own independent language + voice state,
 // separate from the AI Chat tab, since they are different conversations.
 let ragLang = "en";
@@ -127,6 +137,24 @@ function enterApp() {
   ensureDbReady();
   setupVoice();
   setupRagVoice();
+
+  // Fire-and-forget: start warming up the Analytics tab's AI Predictive
+  // Insights + AI Anomaly Detection sections right away, in parallel with
+  // the rest of the app initialization above, instead of waiting until the
+  // user navigates to the Analytics tab.
+  preloadAnalyticsInsights();
+}
+
+function preloadAnalyticsInsights() {
+  if (analyticsPreloadStarted) return;
+  analyticsPreloadStarted = true;
+
+  loadPredictive();
+  // Anomaly scan hits a role-gated endpoint (Admin/SP/Inspector only) --
+  // skip it entirely for Analyst accounts to avoid a guaranteed 403.
+  if (currentUser && ["Admin", "SP", "Inspector"].includes(currentUser.role)) {
+    runAnomalyScan();
+  }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────
@@ -321,6 +349,7 @@ async function runAnomalyScan() {
 
     if (data.anomaly_count === 0) {
       resultsEl.innerHTML = `<div class="anomaly-none">✅ No anomalous hotspots detected among current stations.</div>`;
+      anomalyLoaded = true;
       return;
     }
 
@@ -346,6 +375,7 @@ async function runAnomalyScan() {
         </table>
       </div>
     `;
+    anomalyLoaded = true;
   } catch (e) {
     resultsEl.innerHTML = `<div class="rag-error">❌ Error: ${e.message}</div>`;
   }
@@ -854,7 +884,10 @@ async function loadAnalytics() {
   await loadDashChart("ana-hotspot", "top_hotspots", "bar");
   await loadDashChart("ana-property", "property_recovery", "bar");
   await loadDashChart("ana-gender", "gender_accused", "pie");
-  loadPredictive();
+  // Predictive Insights is usually already preloaded (see
+  // preloadAnalyticsInsights(), triggered at login) -- only fetch here if
+  // that preload hasn't completed yet (e.g. still in-flight, or failed).
+  if (!predictiveLoaded) loadPredictive();
 }
 
 async function loadPredictive() {
@@ -870,6 +903,7 @@ async function loadPredictive() {
       box.innerHTML = typeof marked !== "undefined"
         ? marked.parse(d.response)
         : d.response.replace(/\n/g, "<br/>");
+      predictiveLoaded = true;
     }
   } catch (e) { console.warn("Predictive load failed:", e); }
 }
